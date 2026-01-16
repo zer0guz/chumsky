@@ -28,12 +28,12 @@ where
     E: ParserExtra<'src, I>,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O>
     where
         Self: Sized,
     {
         let cfg = (self.cfg)(A::Config::default(), inp.ctx());
-        self.parser.go_cfg::<M>(inp, cfg)
+        self.parser.go_cfg::<D>(inp, cfg)
     }
 
     go_extra!(O);
@@ -66,12 +66,12 @@ where
     E: ParserExtra<'src, I>,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ()> {
-        let mut state = self.make_iter::<Check>(inp)?;
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, ()> {
+        let mut state = self.make_iter::<DoCheck<D>>(inp)?;
         loop {
-            match self.next::<Check>(inp, &mut state, IterParserDebug::new(false)) {
+            match self.next::<DoCheck<D>>(inp, &mut state, IterParserDebug::new(false)) {
                 Ok(Some(())) => {}
-                Ok(None) => break Ok(M::bind(|| ())),
+                Ok(None) => break Ok(D::Mode::bind(|| ())),
                 Err(()) => break Err(()),
             }
         }
@@ -87,16 +87,16 @@ where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
 {
-    type IterState<M: Mode>
-        = (A::IterState<M>, A::Config)
+    type IterState<D: Driver>
+        = (A::IterState<D>, A::Config)
     where
         I: 'src;
 
     #[inline(always)]
-    fn make_iter<M: Mode>(
+    fn make_iter<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-    ) -> PResult<Emit, Self::IterState<M>> {
+    ) -> PResult<Emit, Self::IterState<D>> {
         Ok((
             A::make_iter(&self.parser, inp)?,
             (self.cfg)(A::Config::default(), inp.ctx()),
@@ -104,12 +104,12 @@ where
     }
 
     #[inline(always)]
-    fn next<M: Mode>(
+    fn next<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-        state: &mut Self::IterState<M>,
+        state: &mut Self::IterState<D>,
         debug: IterParserDebug,
-    ) -> IPResult<M, O> {
+    ) -> IPResult<D::Mode, O> {
         self.parser.next_cfg(inp, &mut state.0, &state.1, debug)
     }
 }
@@ -141,12 +141,12 @@ where
     E: ParserExtra<'src, I>,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ()> {
-        let mut state = self.make_iter::<Check>(inp)?;
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, ()> {
+        let mut state = self.make_iter::<DoCheck<D>>(inp)?;
         loop {
-            match self.next::<Check>(inp, &mut state, IterParserDebug::new(false)) {
+            match self.next::<DoCheck<D>>(inp, &mut state, IterParserDebug::new(false)) {
                 Ok(Some(())) => {}
-                Ok(None) => break Ok(M::bind(|| ())),
+                Ok(None) => break Ok(D::Mode::bind(|| ())),
                 Err(()) => break Err(()),
             }
         }
@@ -162,28 +162,28 @@ where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
 {
-    type IterState<M: Mode>
-        = (A::IterState<M>, A::Config)
+    type IterState<D: Driver>
+        = (A::IterState<D>, A::Config)
     where
         I: 'src;
 
-    fn make_iter<M: Mode>(
+    fn make_iter<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-    ) -> PResult<Emit, Self::IterState<M>> {
+    ) -> PResult<Emit, Self::IterState<D>> {
         let span = inp.span_since(&inp.cursor());
         let cfg = (self.cfg)(A::Config::default(), inp.ctx(), span)
-            .map_err(|e| inp.add_alt_err(&inp.cursor().inner, e))?;
+            .map_err(|e| inp.add_alt_err::<D>(&inp.cursor().inner, e))?;
 
         Ok((A::make_iter(&self.parser, inp)?, cfg))
     }
 
-    fn next<M: Mode>(
+    fn next<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-        state: &mut Self::IterState<M>,
+        state: &mut Self::IterState<D>,
         debug: IterParserDebug,
-    ) -> IPResult<M, O> {
+    ) -> IPResult<D::Mode, O> {
         self.parser.next_cfg(inp, &mut state.0, &state.1, debug)
     }
 }
@@ -218,14 +218,14 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, I::Slice>
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, I::Slice>
     where
         Self: Sized,
     {
         let before = inp.cursor();
-        self.parser.go::<Check>(inp)?;
+        self.parser.go::<DoCheck<D>>(inp)?;
 
-        Ok(M::bind(|| inp.slice_since(&before..)))
+        Ok(D::Mode::bind(|| inp.slice_since(&before..)))
     }
 
     go_extra!(I::Slice);
@@ -261,10 +261,10 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         (&self.parser)
             .filter_map(|out| if (self.filter)(&out) { Some(out) } else { None })
-            .go::<M>(inp)
+            .go::<D>(inp)
     }
 
     go_extra!(O);
@@ -303,13 +303,13 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         let found = inp.peek_maybe();
         let before = inp.cursor();
         // Remove the pre-inner alt, to be reinserted later so we always preserve it
         let old_alt = inp.errors.alt.take();
 
-        let res = self.parser.go::<Emit>(inp);
+        let res = self.parser.go::<DoEmit<D>>(inp);
         let span = inp.span_since(&before);
         let new_alt = inp.errors.alt.take();
 
@@ -320,16 +320,16 @@ where
                     Some(mapped) => {
                         // If successful, reinsert the original alt and then apply the new alt on top of it, since both are valid
                         if let Some(new_alt) = new_alt {
-                            inp.add_alt_err(&new_alt.pos, new_alt.err);
+                            inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
                         }
-                        Ok(M::bind(|| mapped))
+                        Ok(D::Mode::bind(|| mapped))
                     }
                     None => {
                         // If unsuccessful, reinsert the original alt but replace the new alt with the "something else" error (since it overrides it)
                         let expected = [DefaultExpected::SomethingElse];
                         // TODO: Use something more detailed than the next token as the found
                         let err = E::Error::expected_found(expected, found, span);
-                        inp.add_alt_err(&before.inner, err);
+                        inp.add_alt_err::<D>(&before.inner, err);
                         Err(())
                     }
                 }
@@ -338,7 +338,7 @@ where
             Err(_) => {
                 // Can't fail!
                 let new_alt = new_alt.unwrap();
-                inp.add_alt_err(&new_alt.pos, new_alt.err);
+                inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
                 Err(())
             }
         }
@@ -380,9 +380,9 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-        let out = self.parser.go::<M>(inp)?;
-        Ok(M::map(out, &self.mapper))
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+        let out = self.parser.go::<D>(inp)?;
+        Ok(D::Mode::map(out, &self.mapper))
     }
 
     go_extra!(O);
@@ -395,28 +395,28 @@ where
     A: IterParser<'src, I, OA, E>,
     F: Fn(OA) -> O,
 {
-    type IterState<M: Mode>
-        = A::IterState<M>
+    type IterState<D: Driver>
+        = A::IterState<D>
     where
         I: 'src;
 
     #[inline(always)]
-    fn make_iter<M: Mode>(
+    fn make_iter<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-    ) -> PResult<Emit, Self::IterState<M>> {
+    ) -> PResult<Emit, Self::IterState<D>> {
         self.parser.make_iter(inp)
     }
 
     #[inline(always)]
-    fn next<M: Mode>(
+    fn next<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-        state: &mut Self::IterState<M>,
+        state: &mut Self::IterState<D>,
         debug: IterParserDebug,
-    ) -> IPResult<M, O> {
-        match self.parser.next::<M>(inp, state, debug) {
-            Ok(Some(o)) => Ok(Some(M::map(o, &self.mapper))),
+    ) -> IPResult<D::Mode, O> {
+        match self.parser.next::<D>(inp, state, debug) {
+            Ok(Some(o)) => Ok(Some(D::Mode::map(o, &self.mapper))),
             Ok(None) => Ok(None),
             Err(()) => Err(()),
         }
@@ -456,10 +456,10 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         let before = inp.cursor();
-        let out = self.parser.go::<M>(inp)?;
-        Ok(M::map(out, |out| {
+        let out = self.parser.go::<D>(inp)?;
+        Ok(D::Mode::map(out, |out| {
             (self.mapper)(out, &mut MapExtra::new(&before, inp))
         }))
     }
@@ -474,29 +474,29 @@ where
     A: IterParser<'src, I, OA, E>,
     F: Fn(OA, &mut MapExtra<'src, '_, I, E>) -> O,
 {
-    type IterState<M: Mode>
-        = A::IterState<M>
+    type IterState<D: Driver>
+        = A::IterState<D>
     where
         I: 'src;
 
     #[inline(always)]
-    fn make_iter<M: Mode>(
+    fn make_iter<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-    ) -> PResult<Emit, Self::IterState<M>> {
+    ) -> PResult<Emit, Self::IterState<D>> {
         self.parser.make_iter(inp)
     }
 
     #[inline(always)]
-    fn next<M: Mode>(
+    fn next<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-        state: &mut Self::IterState<M>,
+        state: &mut Self::IterState<D>,
         debug: IterParserDebug,
-    ) -> IPResult<M, O> {
+    ) -> IPResult<D::Mode, O> {
         let before = inp.cursor();
-        match self.parser.next::<M>(inp, state, debug) {
-            Ok(Some(o)) => Ok(Some(M::map(o, |o| {
+        match self.parser.next::<D>(inp, state, debug) {
+            Ok(Some(o)) => Ok(Some(D::Mode::map(o, |o| {
                 (self.mapper)(o, &mut MapExtra::new(&before, inp))
             }))),
             Ok(None) => Ok(None),
@@ -537,9 +537,9 @@ where
     OA: Tuple,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-        let out = self.parser.go::<M>(inp)?;
-        Ok(M::map(out, |out| self.mapper.call(out)))
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+        let out = self.parser.go::<D>(inp)?;
+        Ok(D::Mode::map(out, |out| self.mapper.call(out)))
     }
 
     go_extra!(O);
@@ -554,28 +554,28 @@ where
     F: Fn<OA, Output = O>,
     OA: Tuple,
 {
-    type IterState<M: Mode>
-        = A::IterState<M>
+    type IterState<D: Driver>
+        = A::IterState<D>
     where
         I: 'src;
 
     #[inline(always)]
-    fn make_iter<M: Mode>(
+    fn make_iter<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-    ) -> PResult<Emit, Self::IterState<M>> {
+    ) -> PResult<Emit, Self::IterState<D>> {
         self.parser.make_iter(inp)
     }
 
     #[inline(always)]
-    fn next<M: Mode>(
+    fn next<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-        state: &mut Self::IterState<M>,
+        state: &mut Self::IterState<D>,
         debug: IterParserDebug,
-    ) -> IPResult<M, O> {
-        match self.parser.next::<M>(inp, state, debug) {
-            Ok(Some(o)) => Ok(Some(M::map(o, |o| self.mapper.call(o)))),
+    ) -> IPResult<D::Mode, O> {
+        match self.parser.next::<D>(inp, state, debug) {
+            Ok(Some(o)) => Ok(Some(D::Mode::map(o, |o| self.mapper.call(o)))),
             Ok(None) => Ok(None),
             Err(()) => Err(()),
         }
@@ -606,10 +606,10 @@ where
     A: Parser<'src, I, OA, E>,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, I::Span> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, I::Span> {
         let before = inp.cursor();
-        self.parser.go::<Check>(inp)?;
-        Ok(M::bind(|| inp.span_since(&before)))
+        self.parser.go::<DoCheck<D>>(inp)?;
+        Ok(D::Mode::bind(|| inp.span_since(&before)))
     }
 
     go_extra!(I::Span);
@@ -641,13 +641,15 @@ where
     I::Span: WrappingSpan<OA>,
 {
     #[inline(always)]
-    fn go<M: Mode>(
+    fn go<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-    ) -> PResult<M, <I::Span as WrappingSpan<OA>>::Spanned> {
+    ) -> PResult<D::Mode, <I::Span as WrappingSpan<OA>>::Spanned> {
         let before = inp.cursor();
-        let out = self.parser.go::<M>(inp)?;
-        Ok(M::map(out, |out| inp.span_since(&before).make_wrapped(out)))
+        let out = self.parser.go::<D>(inp)?;
+        Ok(D::Mode::map(out, |out| {
+            inp.span_since(&before).make_wrapped(out)
+        }))
     }
 
     go_extra!(<I::Span as WrappingSpan<OA>>::Spanned);
@@ -683,18 +685,18 @@ where
     F: Fn(OA, OB, &mut MapExtra<'src, '_, I, E>) -> Result<OA, E::Error>,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, OA>
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, OA>
     where
         Self: Sized,
     {
         let before_all = inp.cursor();
-        let mut out = self.parser_a.go::<Emit>(inp)?;
-        let mut iter_state = self.parser_b.make_iter::<Emit>(inp)?;
+        let mut out = self.parser_a.go::<DoEmit<D>>(inp)?;
+        let mut iter_state = self.parser_b.make_iter::<DoEmit<D>>(inp)?;
         loop {
             let before = inp.cursor();
             match self
                 .parser_b
-                .next::<Emit>(inp, &mut iter_state, IterParserDebug::new(false))
+                .next::<DoEmit<D>>(inp, &mut iter_state, IterParserDebug::new(false))
             {
                 Ok(Some(b_out)) => {
                     match (self.folder)(out, b_out, &mut MapExtra::new(&before_all, inp)) {
@@ -702,12 +704,12 @@ where
                             out = b_f_out;
                         }
                         Err(err) => {
-                            inp.add_alt_err(&before.inner, err);
+                            inp.add_alt_err::<D>(&before.inner, err);
                             break Err(());
                         }
                     }
                 }
-                Ok(None) => break Ok(M::bind(|| out)),
+                Ok(None) => break Ok(D::Mode::bind(|| out)),
                 Err(()) => break Err(()),
             }
         }
@@ -749,12 +751,12 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         let before = inp.cursor();
         // Remove the pre-inner alt, to be reinserted later so we always preserve it
         let old_alt = inp.errors.alt.take();
 
-        let res = self.parser.go::<Emit>(inp);
+        let res = self.parser.go::<DoEmit<D>>(inp);
         let span = inp.span_since(&before);
         let new_alt = inp.errors.alt.take();
 
@@ -766,14 +768,14 @@ where
                     Ok(out) => {
                         // If successful apply the new alt on top of the original alt, since both are valid
                         if let Some(new_alt) = new_alt {
-                            inp.add_alt_err(&new_alt.pos, new_alt.err);
+                            inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
                         }
-                        Ok(M::bind(|| out))
+                        Ok(D::Mode::bind(|| out))
                     }
 
                     Err(err) => {
                         // If unsuccessful replace the new alt with the mapper error (since it overrides it)
-                        inp.add_alt_err(&before.inner, err);
+                        inp.add_alt_err::<D>(&before.inner, err);
                         Err(())
                     }
                 }
@@ -782,7 +784,7 @@ where
             Err(_) => {
                 // Can't fail!
                 let new_alt = new_alt.unwrap();
-                inp.add_alt_err(&new_alt.pos, new_alt.err);
+                inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
                 Err(())
             }
         }
@@ -818,12 +820,12 @@ where
     F: Fn(OA, &mut MapExtra<'src, '_, I, E>) -> Result<O, E::Error>,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         let before = inp.cursor();
         // Remove the pre-inner alt, to be reinserted later so we always preserve it
         let old_alt = inp.errors.alt.take();
 
-        let res = self.parser.go::<Emit>(inp);
+        let res = self.parser.go::<DoEmit<D>>(inp);
         let new_alt = inp.errors.alt.take();
 
         // Reinsert the original alt
@@ -834,14 +836,14 @@ where
                     Ok(out) => {
                         // If successful apply the new alt on top of the original alt, since both are valid
                         if let Some(new_alt) = new_alt {
-                            inp.add_alt_err(&new_alt.pos, new_alt.err);
+                            inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
                         }
-                        Ok(M::bind(|| out))
+                        Ok(D::Mode::bind(|| out))
                     }
 
                     Err(err) => {
                         // If unsuccessful replace the new alt with the mapper error (since it overrides it)
-                        inp.add_alt_err(&before.inner, err);
+                        inp.add_alt_err::<D>(&before.inner, err);
                         Err(())
                     }
                 }
@@ -850,7 +852,7 @@ where
             Err(_) => {
                 // Can't fail!
                 let new_alt = new_alt.unwrap();
-                inp.add_alt_err(&new_alt.pos, new_alt.err);
+                inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
                 Err(())
             }
         }
@@ -892,9 +894,9 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-        self.parser.go::<Check>(inp)?;
-        Ok(M::bind(|| self.to.clone()))
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+        self.parser.go::<DoCheck<D>>(inp)?;
+        Ok(D::Mode::bind(|| self.to.clone()))
     }
 
     go_extra!(O);
@@ -925,9 +927,9 @@ where
     O: IntoIterator,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ()> {
-        self.parser.go::<Check>(inp)?;
-        Ok(M::bind(|| ()))
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, ()> {
+        self.parser.go::<DoCheck<D>>(inp)?;
+        Ok(D::Mode::bind(|| ()))
     }
 
     go_extra!(());
@@ -942,25 +944,25 @@ where
 {
     // TODO: Don't always produce output for non-emitting modes, but needed due to length. Use some way to 'select'
     // between iterator and usize at compile time.
-    type IterState<M: Mode> = O::IntoIter; //M::Output<O::IntoIter>;
+    type IterState<D: Driver> = O::IntoIter; //M::Output<O::IntoIter>;
 
     #[inline(always)]
-    fn make_iter<M: Mode>(
+    fn make_iter<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-    ) -> PResult<Emit, Self::IterState<M>> {
-        // M::map(self.parser.go::<M>(inp)?, |out| out.into_iter())
-        self.parser.go::<Emit>(inp).map(|out| out.into_iter())
+    ) -> PResult<Emit, Self::IterState<D>> {
+        // D::Mode::map(self.parser.go::<D>(inp)?, |out| out.into_iter())
+        self.parser.go::<DoEmit<D>>(inp).map(|out| out.into_iter())
     }
 
     #[inline(always)]
-    fn next<M: Mode>(
+    fn next<D: Driver>(
         &self,
         _inp: &mut InputRef<'src, '_, I, E>,
-        iter: &mut Self::IterState<M>,
+        iter: &mut Self::IterState<D>,
         _debug: IterParserDebug,
-    ) -> IPResult<M, O::Item> {
-        Ok(iter.next().map(|out| M::bind(|| out)))
+    ) -> IPResult<D::Mode, O::Item> {
+        Ok(iter.next().map(|out| D::Mode::bind(|| out)))
     }
 }
 
@@ -994,9 +996,9 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ()> {
-        self.parser.go::<Check>(inp)?;
-        Ok(M::bind(|| ()))
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, ()> {
+        self.parser.go::<DoCheck<D>>(inp)?;
+        Ok(D::Mode::bind(|| ()))
     }
 
     go_extra!(());
@@ -1031,9 +1033,9 @@ where
     U: fmt::Debug,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-        let out = self.parser.go::<M>(inp)?;
-        Ok(M::map(out, |out| match out {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+        let out = self.parser.go::<D>(inp)?;
+        Ok(D::Mode::map(out, |out| match out {
             Ok(out) => out,
 
             Err(err) => {
@@ -1058,9 +1060,9 @@ where
     A: Parser<'src, I, Option<O>, E>,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-        let out = self.parser.go::<M>(inp)?;
-        Ok(M::map(out, |out| match out {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+        let out = self.parser.go::<D>(inp)?;
+        Ok(D::Mode::map(out, |out| match out {
             Some(out) => out,
             None => {
                 #[cfg(debug_assertions)]
@@ -1093,7 +1095,7 @@ where
     A: Parser<'src, I, O, E>,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         let before = inp.cursor();
         // TODO: Don't use address, since this might not be constant?
         let key = (
@@ -1118,7 +1120,7 @@ where
             }
         }
 
-        let res = self.parser.go::<M>(inp);
+        let res = self.parser.go::<D>(inp);
 
         if res.is_err() {
             let alt = inp.take_alt();
@@ -1169,10 +1171,10 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, (OA, OB)> {
-        let a = self.parser_a.go::<M>(inp)?;
-        let b = self.parser_b.go::<M>(inp)?;
-        Ok(M::combine(a, b, |a: OA, b: OB| (a, b)))
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, (OA, OB)> {
+        let a = self.parser_a.go::<D>(inp)?;
+        let b = self.parser_b.go::<D>(inp)?;
+        Ok(D::Mode::combine(a, b, |a: OA, b: OB| (a, b)))
     }
 
     go_extra!((OA, OB));
@@ -1185,26 +1187,26 @@ where
     A: IterParser<'src, I, O, E>,
     B: IterParser<'src, I, O, E>,
 {
-    type IterState<M: Mode>
-        = (A::IterState<M>, Option<B::IterState<M>>)
+    type IterState<D: Driver>
+        = (A::IterState<D>, Option<B::IterState<D>>)
     where
         I: 'src;
 
     #[inline(always)]
-    fn make_iter<M: Mode>(
+    fn make_iter<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-    ) -> PResult<Emit, Self::IterState<M>> {
-        Ok((self.parser_a.make_iter::<M>(inp)?, None))
+    ) -> PResult<Emit, Self::IterState<D>> {
+        Ok((self.parser_a.make_iter::<D>(inp)?, None))
     }
 
     #[inline(always)]
-    fn next<M: Mode>(
+    fn next<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-        state: &mut Self::IterState<M>,
+        state: &mut Self::IterState<D>,
         debug: IterParserDebug,
-    ) -> IPResult<M, O> {
+    ) -> IPResult<D::Mode, O> {
         match state {
             (_, Some(b)) => self.parser_b.next(inp, b, debug),
             (a, b) => match self.parser_a.next(inp, a, debug)? {
@@ -1254,10 +1256,10 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, OB> {
-        self.parser_a.go::<Check>(inp)?;
-        let b = self.parser_b.go::<M>(inp)?;
-        Ok(M::map(b, |b: OB| b))
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, OB> {
+        self.parser_a.go::<DoCheck<D>>(inp)?;
+        let b = self.parser_b.go::<D>(inp)?;
+        Ok(D::Mode::map(b, |b: OB| b))
     }
 
     go_extra!(OB);
@@ -1299,10 +1301,10 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, OA> {
-        let a = self.parser_a.go::<M>(inp)?;
-        self.parser_b.go::<Check>(inp)?;
-        Ok(M::map(a, |a: OA| a))
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, OA> {
+        let a = self.parser_a.go::<D>(inp)?;
+        self.parser_b.go::<DoCheck<D>>(inp)?;
+        Ok(D::Mode::map(a, |a: OA| a))
     }
 
     go_extra!(OA);
@@ -1364,10 +1366,10 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         let before = inp.save();
 
-        let inp2 = self.parser_b.go::<Emit>(inp)?;
+        let inp2 = self.parser_b.go::<DoEmit<D>>(inp)?;
 
         let alt = inp.errors.alt.take();
 
@@ -1378,7 +1380,7 @@ where
             start,
             &mut cache,
             &mut Default::default(),
-            |inp| (&self.parser_a).then_ignore(end()).go::<M>(inp),
+            |inp| (&self.parser_a).then_ignore(end()).go::<D>(inp),
             #[cfg(feature = "memoization")]
             &mut memos,
         );
@@ -1388,7 +1390,7 @@ where
         let new_alt = inp.errors.alt.take();
         inp.errors.alt = alt;
         if let Some(new_alt) = new_alt {
-            inp.add_alt_err(&before.cursor().inner, new_alt.err);
+            inp.add_alt_err::<D>(&before.cursor().inner, new_alt.err);
         }
         for err in inp
             .errors
@@ -1435,9 +1437,9 @@ where
     OA: 'src,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, OB> {
-        let p1 = self.parser.go::<Emit>(inp)?;
-        inp.with_ctx(&p1, |inp| self.then.go::<M>(inp))
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, OB> {
+        let p1 = self.parser.go::<DoEmit<D>>(inp)?;
+        inp.with_ctx(&p1, |inp| self.then.go::<D>(inp))
     }
 
     go_extra!(OB);
@@ -1452,28 +1454,28 @@ where
     B: IterParser<'src, I, OB, extra::Full<E::Error, E::State, OA>>,
     OA: 'src,
 {
-    type IterState<M: Mode>
-        = (OA, B::IterState<M>)
+    type IterState<D: Driver>
+        = (OA, B::IterState<D>)
     where
         I: 'src;
 
     #[inline(always)]
-    fn make_iter<M: Mode>(
+    fn make_iter<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-    ) -> PResult<Emit, Self::IterState<M>> {
-        let out = self.parser.go::<Emit>(inp)?;
-        let then = inp.with_ctx(&out, |inp| self.then.make_iter::<M>(inp))?;
+    ) -> PResult<Emit, Self::IterState<D>> {
+        let out = self.parser.go::<DoEmit<D>>(inp)?;
+        let then = inp.with_ctx(&out, |inp| self.then.make_iter::<D>(inp))?;
         Ok((out, then))
     }
 
     #[inline(always)]
-    fn next<M: Mode>(
+    fn next<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-        state: &mut Self::IterState<M>,
+        state: &mut Self::IterState<D>,
         debug: IterParserDebug,
-    ) -> IPResult<M, OB> {
+    ) -> IPResult<D::Mode, OB> {
         let (ctx, inner_state) = state;
 
         inp.with_ctx(ctx, |inp| self.then.next(inp, inner_state, debug))
@@ -1509,10 +1511,10 @@ where
     OA: 'src,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, (OA, OB)> {
-        let p1 = self.parser.go::<Emit>(inp)?;
-        let p2 = inp.with_ctx(&p1, |inp| self.then.go::<M>(inp))?;
-        Ok(M::map(p2, |p2| (p1, p2)))
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, (OA, OB)> {
+        let p1 = self.parser.go::<DoEmit<D>>(inp)?;
+        let p2 = inp.with_ctx(&p1, |inp| self.then.go::<D>(inp))?;
+        Ok(D::Mode::map(p2, |p2| (p1, p2)))
     }
 
     go_extra!((OA, OB));
@@ -1527,28 +1529,28 @@ where
     B: IterParser<'src, I, OB, extra::Full<E::Error, E::State, OA>>,
     OA: 'src,
 {
-    type IterState<M: Mode>
-        = (OA, B::IterState<M>)
+    type IterState<D: Driver>
+        = (OA, B::IterState<D>)
     where
         I: 'src;
 
     #[inline(always)]
-    fn make_iter<M: Mode>(
+    fn make_iter<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-    ) -> PResult<Emit, Self::IterState<M>> {
-        let out = self.parser.go::<Emit>(inp)?;
-        let then = inp.with_ctx(&out, |inp| self.then.make_iter::<M>(inp))?;
+    ) -> PResult<Emit, Self::IterState<D>> {
+        let out = self.parser.go::<DoEmit<D>>(inp)?;
+        let then = inp.with_ctx(&out, |inp| self.then.make_iter::<D>(inp))?;
         Ok((out, then))
     }
 
     #[inline(always)]
-    fn next<M: Mode>(
+    fn next<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-        state: &mut Self::IterState<M>,
+        state: &mut Self::IterState<D>,
         debug: IterParserDebug,
-    ) -> IPResult<M, OB> {
+    ) -> IPResult<D::Mode, OB> {
         let (ctx, inner_state) = state;
 
         inp.with_ctx(ctx, |inp| self.then.next(inp, inner_state, debug))
@@ -1579,8 +1581,8 @@ where
     Ctx: 'src,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-        inp.with_ctx(&self.ctx, |inp| self.parser.go::<M>(inp))
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+        inp.with_ctx(&self.ctx, |inp| self.parser.go::<D>(inp))
     }
 
     go_extra!(O);
@@ -1610,8 +1612,8 @@ where
     State: 'src + Clone + Inspector<'src, I>,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-        inp.with_state(&mut self.state.clone(), |inp| self.parser.go::<M>(inp))
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+        inp.with_state(&mut self.state.clone(), |inp| self.parser.go::<D>(inp))
     }
 
     go_extra!(O);
@@ -1659,10 +1661,10 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, OA> {
-        self.start.go::<Check>(inp)?;
-        let a = self.parser.go::<M>(inp)?;
-        self.end.go::<Check>(inp)?;
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, OA> {
+        self.start.go::<DoCheck<D>>(inp)?;
+        let a = self.parser.go::<D>(inp)?;
+        self.end.go::<DoCheck<D>>(inp)?;
         Ok(a)
     }
 
@@ -1696,10 +1698,10 @@ where
     B: Parser<'src, I, OB, E>,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, OA> {
-        self.padding.go::<Check>(inp)?;
-        let a = self.parser.go::<M>(inp)?;
-        self.padding.go::<Check>(inp)?;
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, OA> {
+        self.padding.go::<DoCheck<D>>(inp)?;
+        let a = self.parser.go::<D>(inp)?;
+        self.padding.go::<DoCheck<D>>(inp)?;
         Ok(a)
     }
 
@@ -1726,8 +1728,8 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-        self.choice.go::<M>(inp)
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+        self.choice.go::<D>(inp)
     }
 
     go_extra!(O);
@@ -1871,11 +1873,11 @@ where
 
     #[inline(always)]
     #[allow(clippy::nonminimal_bool)] // TODO: Remove this, lint is currently buggy
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ()> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, ()> {
         if self.at_most == !0 && self.at_least == 0 {
             loop {
                 let before = inp.save();
-                match self.parser.go::<Check>(inp) {
+                match self.parser.go::<DoCheck<D>>(inp) {
                     Ok(()) => {
                         #[cfg(debug_assertions)]
                         debug_assert!(
@@ -1886,16 +1888,16 @@ where
                     }
                     Err(()) => {
                         inp.rewind(before);
-                        break Ok(M::bind(|| ()));
+                        break Ok(D::Mode::bind(|| ()));
                     }
                 }
             }
         } else {
-            let mut state = self.make_iter::<Check>(inp)?;
+            let mut state = self.make_iter::<DoCheck<D>>(inp)?;
             loop {
-                match self.next::<Check>(inp, &mut state, IterParserDebug::new(false)) {
+                match self.next::<DoCheck<D>>(inp, &mut state, IterParserDebug::new(false)) {
                     Ok(Some(())) => {}
-                    Ok(None) => break Ok(M::bind(|| ())),
+                    Ok(None) => break Ok(D::Mode::bind(|| ())),
                     // TODO: Technically we should be rewinding here: as-is, this is invalid since errorring parsers
                     // are permitted to leave input state unspecified. Really, unwinding should occur *here* and not in
                     // `next`.
@@ -1914,7 +1916,7 @@ where
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E>,
 {
-    type IterState<M: Mode> = usize;
+    type IterState<D: Driver> = usize;
 
     #[doc(hidden)]
     #[cfg(feature = "debug")]
@@ -1926,26 +1928,26 @@ where
     }
 
     #[inline(always)]
-    fn make_iter<M: Mode>(
+    fn make_iter<D: Driver>(
         &self,
         _inp: &mut InputRef<'src, '_, I, E>,
-    ) -> PResult<Emit, Self::IterState<M>> {
+    ) -> PResult<Emit, Self::IterState<D>> {
         Ok(0)
     }
 
     #[inline(always)]
-    fn next<M: Mode>(
+    fn next<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-        count: &mut Self::IterState<M>,
+        count: &mut Self::IterState<D>,
         debug: IterParserDebug,
-    ) -> IPResult<M, O> {
+    ) -> IPResult<D::Mode, O> {
         if *count as u64 >= self.at_most {
             return Ok(None);
         }
 
         let before = inp.save();
-        match self.parser.go::<M>(inp) {
+        match self.parser.go::<D>(inp) {
             Ok(item) => {
                 #[cfg(debug_assertions)]
                 if !debug.nonconsumption_is_ok && self.at_most == !0 {
@@ -1979,13 +1981,13 @@ where
     type Config = RepeatedCfg;
 
     #[inline(always)]
-    fn next_cfg<M: Mode>(
+    fn next_cfg<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-        count: &mut Self::IterState<M>,
+        count: &mut Self::IterState<D>,
         cfg: &Self::Config,
         debug: IterParserDebug,
-    ) -> IPResult<M, O> {
+    ) -> IPResult<D::Mode, O> {
         let at_most = cfg.at_most.map(|x| x as u64).unwrap_or(self.at_most);
         let at_least = cfg.at_least.unwrap_or(self.at_least);
 
@@ -1994,7 +1996,7 @@ where
         }
 
         let before = inp.save();
-        match self.parser.go::<M>(inp) {
+        match self.parser.go::<D>(inp) {
             Ok(item) => {
                 #[cfg(debug_assertions)]
                 if !debug.nonconsumption_is_ok {
@@ -2195,7 +2197,7 @@ where
     A: Parser<'src, I, OA, E>,
     B: Parser<'src, I, OB, E>,
 {
-    type IterState<M: Mode>
+    type IterState<D: Driver>
         = usize
     where
         I: 'src;
@@ -2210,20 +2212,20 @@ where
     }
 
     #[inline(always)]
-    fn make_iter<M: Mode>(
+    fn make_iter<D: Driver>(
         &self,
         _inp: &mut InputRef<'src, '_, I, E>,
-    ) -> PResult<Emit, Self::IterState<M>> {
+    ) -> PResult<Emit, Self::IterState<D>> {
         Ok(0)
     }
 
     #[inline(always)]
-    fn next<M: Mode>(
+    fn next<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-        state: &mut Self::IterState<M>,
+        state: &mut Self::IterState<D>,
         debug: IterParserDebug,
-    ) -> IPResult<M, OA> {
+    ) -> IPResult<D::Mode, OA> {
         #[cfg(debug_assertions)]
         let before = inp.cursor();
 
@@ -2233,11 +2235,11 @@ where
 
         let before_separator = inp.save();
         if *state == 0 && self.allow_leading {
-            if self.separator.go::<Check>(inp).is_err() {
+            if self.separator.go::<DoCheck<D>>(inp).is_err() {
                 inp.rewind(before_separator.clone());
             }
         } else if *state > 0 {
-            match self.separator.go::<Check>(inp) {
+            match self.separator.go::<DoCheck<D>>(inp) {
                 Ok(()) => {
                     // Do nothing
                 }
@@ -2253,7 +2255,7 @@ where
         }
 
         let before_item = inp.save();
-        match self.parser.go::<M>(inp) {
+        match self.parser.go::<D>(inp) {
             Ok(item) => {
                 #[cfg(debug_assertions)]
                 if !debug.nonconsumption_is_ok && self.at_most == !0 && *state > 0 {
@@ -2307,12 +2309,12 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ()> {
-        let mut state = self.make_iter::<Check>(inp)?;
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, ()> {
+        let mut state = self.make_iter::<DoCheck<D>>(inp)?;
         loop {
-            match self.next::<Check>(inp, &mut state, IterParserDebug::new(false)) {
+            match self.next::<DoCheck<D>>(inp, &mut state, IterParserDebug::new(false)) {
                 Ok(Some(())) => {}
-                Ok(None) => break Ok(M::bind(|| ())),
+                Ok(None) => break Ok(D::Mode::bind(|| ())),
                 // TODO: Technically we should be rewinding here: as-is, this is invalid since errorring parsers
                 // are permitted to leave input state unspecified. Really, unwinding should occur *here* and not in
                 // `next`.
@@ -2347,30 +2349,30 @@ where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
 {
-    type IterState<M: Mode>
-        = (usize, A::IterState<M>)
+    type IterState<D: Driver>
+        = (usize, A::IterState<D>)
     where
         I: 'src;
 
     #[inline(always)]
-    fn make_iter<M: Mode>(
+    fn make_iter<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-    ) -> PResult<Emit, Self::IterState<M>> {
+    ) -> PResult<Emit, Self::IterState<D>> {
         Ok((0, A::make_iter(&self.parser, inp)?))
     }
 
     #[inline(always)]
-    fn next<M: Mode>(
+    fn next<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-        state: &mut Self::IterState<M>,
+        state: &mut Self::IterState<D>,
         debug: IterParserDebug,
-    ) -> IPResult<M, (usize, O)> {
+    ) -> IPResult<D::Mode, (usize, O)> {
         let out = self
             .parser
             .next(inp, &mut state.1, debug)?
-            .map(|out| M::map(out, |out| (state.0, out)));
+            .map(|out| D::Mode::map(out, |out| (state.0, out)));
         state.0 += 1;
         Ok(out)
     }
@@ -2407,16 +2409,18 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, C> {
-        let mut output = M::bind::<C, _>(|| C::default());
-        let mut iter_state = self.parser.make_iter::<M>(inp)?;
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, C> {
+        let mut output = D::Mode::bind::<C, _>(|| C::default());
+        let mut iter_state = self.parser.make_iter::<D>(inp)?;
         loop {
             match self
                 .parser
-                .next::<M>(inp, &mut iter_state, IterParserDebug::new(false))
+                .next::<D>(inp, &mut iter_state, IterParserDebug::new(false))
             {
                 Ok(Some(out)) => {
-                    M::combine_mut(&mut output, out, |output: &mut C, item| output.push(item));
+                    D::Mode::combine_mut(&mut output, out, |output: &mut C, item| {
+                        output.push(item)
+                    });
                 }
 
                 Ok(None) => break Ok(output),
@@ -2454,31 +2458,31 @@ where
     C: ContainerExactly<O>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, C> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, C> {
         // let before = inp.cursor();
-        let mut output = M::bind(|| C::uninit());
-        let mut iter_state = self.parser.make_iter::<M>(inp)?;
+        let mut output = D::Mode::bind(|| C::uninit());
+        let mut iter_state = self.parser.make_iter::<D>(inp)?;
         for idx in 0..C::LEN {
             match self
                 .parser
-                .next::<M>(inp, &mut iter_state, IterParserDebug::new(true))
+                .next::<D>(inp, &mut iter_state, IterParserDebug::new(true))
             {
                 Ok(Some(out)) => {
-                    M::combine_mut(&mut output, out, |c, out| C::write(c, idx, out));
+                    D::Mode::combine_mut(&mut output, out, |c, out| C::write(c, idx, out));
                 }
                 Ok(None) => {
                     // let span = inp.span_since(&before);
                     // We don't add an alt here because we assume the inner parser will. Is this safe to assume?
                     // inp.add_alt([ExpectedMoreElements(Some(C::LEN - idx))], None, span);
                     // SAFETY: We're guaranteed to have initialized up to `idx` values
-                    M::map(output, |mut output| unsafe {
+                    D::Mode::map(output, |mut output| unsafe {
                         C::drop_before(&mut output, idx)
                     });
                     return Err(());
                 }
                 Err(()) => {
                     // SAFETY: We're guaranteed to have initialized up to `idx` values
-                    M::map(output, |mut output| unsafe {
+                    D::Mode::map(output, |mut output| unsafe {
                         C::drop_before(&mut output, idx)
                     });
                     return Err(());
@@ -2486,7 +2490,7 @@ where
             }
         }
         // SAFETY: If we reach this point, we guarantee to have initialized C::LEN values
-        Ok(M::map(output, |output| unsafe { C::take(output) }))
+        Ok(D::Mode::map(output, |output| unsafe { C::take(output) }))
     }
 
     go_extra!(C);
@@ -2511,13 +2515,13 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, Option<O>> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, Option<O>> {
         let before = inp.save();
-        Ok(match self.parser.go::<M>(inp) {
-            Ok(out) => M::map::<O, _, _>(out, Some),
+        Ok(match self.parser.go::<D>(inp) {
+            Ok(out) => D::Mode::map::<O, _, _>(out, Some),
             Err(()) => {
                 inp.rewind(before);
-                M::bind::<Option<O>, _>(|| None)
+                D::Mode::bind::<Option<O>, _>(|| None)
             }
         })
     }
@@ -2531,29 +2535,29 @@ where
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E>,
 {
-    type IterState<M: Mode> = bool;
+    type IterState<D: Driver> = bool;
 
     #[inline(always)]
-    fn make_iter<M: Mode>(
+    fn make_iter<D: Driver>(
         &self,
         _inp: &mut InputRef<'src, '_, I, E>,
-    ) -> PResult<Emit, Self::IterState<M>> {
+    ) -> PResult<Emit, Self::IterState<D>> {
         Ok(false)
     }
 
     #[inline(always)]
-    fn next<M: Mode>(
+    fn next<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-        finished: &mut Self::IterState<M>,
+        finished: &mut Self::IterState<D>,
         _debug: IterParserDebug,
-    ) -> IPResult<M, O> {
+    ) -> IPResult<D::Mode, O> {
         if *finished {
             return Ok(None);
         }
 
         let before = inp.save();
-        match self.parser.go::<M>(inp) {
+        match self.parser.go::<D>(inp) {
             Ok(item) => {
                 *finished = true;
                 Ok(Some(item))
@@ -2591,12 +2595,12 @@ where
     A: Parser<'src, I, OA, E>,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ()> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, ()> {
         let before = inp.save();
 
         let alt = inp.errors.alt.take();
 
-        let result = self.parser.go::<Check>(inp);
+        let result = self.parser.go::<DoCheck<D>>(inp);
         let result_span = inp.span_since(before.cursor());
         inp.rewind(before);
 
@@ -2605,10 +2609,10 @@ where
         match result {
             Ok(()) => {
                 let found = inp.peek_maybe();
-                inp.add_alt([DefaultExpected::SomethingElse], found, result_span);
+                inp.add_alt::<D, _, _>([DefaultExpected::SomethingElse], found, result_span);
                 Err(())
             }
-            Err(()) => Ok(M::bind(|| ())),
+            Err(()) => Ok(D::Mode::bind(|| ())),
         }
     }
 
@@ -2643,43 +2647,43 @@ where
     A: IterParser<'src, I, O, E>,
     O: IntoIterator,
 {
-    type IterState<M: Mode> = (A::IterState<M>, Option<M::Output<O::IntoIter>>);
+    type IterState<D: Driver> = (A::IterState<D>, Option<M::Output<O::IntoIter>>);
 
     #[inline(always)]
-    fn make_iter<M: Mode>(
+    fn make_iter<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-    ) -> PResult<Emit, Self::IterState<M>> {
+    ) -> PResult<Emit, Self::IterState<D>> {
         Ok((self.parser.make_iter(inp)?, None))
     }
 
     #[inline(always)]
-    fn next<M: Mode>(
+    fn next<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-        (st, iter): &mut Self::IterState<M>,
+        (st, iter): &mut Self::IterState<D>,
         debug: IterParserDebug,
-    ) -> IPResult<M, O::Item> {
+    ) -> IPResult<D::Mode, O::Item> {
         if let Some(item) = iter
             .as_mut()
-            .and_then(|i| M::get_or(M::map(M::from_mut(i), |i| i.next()), || None))
+            .and_then(|i| M::get_or(D::Mode::map(M::from_mut(i), |i| i.next()), || None))
         {
-            return Ok(Some(M::bind(move || item)));
+            return Ok(Some(D::Mode::bind(move || item)));
         }
 
         // TODO: Debug looping check
         loop {
             let before = inp.save();
-            match self.parser.next::<M>(inp, st, debug) {
+            match self.parser.next::<D>(inp, st, debug) {
                 Ok(Some(item)) => match M::get_or(
-                    M::map(
-                        M::from_mut(iter.insert(M::map(item, |i| i.into_iter()))),
+                    D::Mode::map(
+                        M::from_mut(iter.insert(D::Mode::map(item, |i| i.into_iter()))),
                         |i| i.next().map(Some),
                     ),
                     || Some(None),
                 ) {
-                    Some(Some(item)) => break Ok(Some(M::bind(move || item))),
-                    Some(None) => break Ok(Some(M::bind(|| unreachable!()))),
+                    Some(Some(item)) => break Ok(Some(D::Mode::bind(move || item))),
+                    Some(None) => break Ok(Some(D::Mode::bind(|| unreachable!()))),
                     None => continue,
                 },
 
@@ -2721,15 +2725,15 @@ where
     B: Parser<'src, I, OB, E>,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, OA> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, OA> {
         let before = inp.save().clone();
-        match self.parser_a.go::<M>(inp) {
+        match self.parser_a.go::<D>(inp) {
             Ok(out) => {
                 // A succeeded -- go back to the beginning and try B
                 let after = inp.save();
                 inp.rewind_input(before);
 
-                match self.parser_b.go::<Check>(inp) {
+                match self.parser_b.go::<DoCheck<D>>(inp) {
                     Ok(()) => {
                         // B succeeded -- go to the end of A and return its output
                         inp.rewind_input(after);
@@ -2782,19 +2786,19 @@ where
     F: Fn(B, O) -> B,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, B>
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, B>
     where
         Self: Sized,
     {
-        let mut acc = M::bind(|| self.init.clone());
-        let mut iter_state = self.parser.make_iter::<M>(inp)?;
+        let mut acc = D::Mode::bind(|| self.init.clone());
+        let mut iter_state = self.parser.make_iter::<D>(inp)?;
         loop {
             match self
                 .parser
-                .next::<M>(inp, &mut iter_state, IterParserDebug::new(false))
+                .next::<D>(inp, &mut iter_state, IterParserDebug::new(false))
             {
                 Ok(Some(out)) => {
-                    acc = M::combine(acc, out, |acc, item| (self.folder)(acc, item));
+                    acc = D::Mode::combine(acc, out, |acc, item| (self.folder)(acc, item));
                 }
                 Ok(None) => break,
                 Err(()) => return Err(()),
@@ -2849,19 +2853,19 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O>
     where
         Self: Sized,
     {
-        let mut a_out = M::bind(|| Vec::new());
-        let mut iter_state = self.parser_a.make_iter::<M>(inp)?;
+        let mut a_out = D::Mode::bind(|| Vec::new());
+        let mut iter_state = self.parser_a.make_iter::<D>(inp)?;
         loop {
             match self
                 .parser_a
-                .next::<M>(inp, &mut iter_state, IterParserDebug::new(false))
+                .next::<D>(inp, &mut iter_state, IterParserDebug::new(false))
             {
                 Ok(Some(out)) => {
-                    M::combine_mut(&mut a_out, out, |a_out, item| a_out.push(item));
+                    D::Mode::combine_mut(&mut a_out, out, |a_out, item| a_out.push(item));
                 }
 
                 Ok(None) => break,
@@ -2870,9 +2874,9 @@ where
             }
         }
 
-        let b_out = self.parser_b.go::<M>(inp)?;
+        let b_out = self.parser_b.go::<D>(inp)?;
 
-        Ok(M::combine(a_out, b_out, |a_out, b_out| {
+        Ok(D::Mode::combine(a_out, b_out, |a_out, b_out| {
             a_out.into_iter().rfold(b_out, |b, a| (self.folder)(a, b))
         }))
     }
@@ -2910,20 +2914,20 @@ where
     F: Fn(OA, O, &mut MapExtra<'src, '_, I, E>) -> O,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O>
     where
         Self: Sized,
     {
-        let mut a_out = M::bind(Vec::new);
-        let mut iter_state = self.parser_a.make_iter::<M>(inp)?;
+        let mut a_out = D::Mode::bind(Vec::new);
+        let mut iter_state = self.parser_a.make_iter::<D>(inp)?;
         loop {
             let before = inp.cursor();
             match self
                 .parser_a
-                .next::<M>(inp, &mut iter_state, IterParserDebug::new(false))
+                .next::<D>(inp, &mut iter_state, IterParserDebug::new(false))
             {
                 Ok(Some(out)) => {
-                    M::combine_mut(&mut a_out, out, |a_out, item| {
+                    D::Mode::combine_mut(&mut a_out, out, |a_out, item| {
                         a_out.push((item, before.clone()))
                     });
                 }
@@ -2934,9 +2938,9 @@ where
             }
         }
 
-        let b_out = self.parser_b.go::<M>(inp)?;
+        let b_out = self.parser_b.go::<D>(inp)?;
 
-        Ok(M::combine(a_out, b_out, |a_out, b_out| {
+        Ok(D::Mode::combine(a_out, b_out, |a_out, b_out| {
             a_out.into_iter().rfold(b_out, |b, (a, before)| {
                 (self.folder)(a, b, &mut MapExtra::new(&before, inp))
             })
@@ -2988,19 +2992,19 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O>
     where
         Self: Sized,
     {
-        let mut out = self.parser_a.go::<M>(inp)?;
-        let mut iter_state = self.parser_b.make_iter::<M>(inp)?;
+        let mut out = self.parser_a.go::<D>(inp)?;
+        let mut iter_state = self.parser_b.make_iter::<D>(inp)?;
         loop {
             match self
                 .parser_b
-                .next::<M>(inp, &mut iter_state, IterParserDebug::new(false))
+                .next::<D>(inp, &mut iter_state, IterParserDebug::new(false))
             {
                 Ok(Some(b_out)) => {
-                    out = M::combine(out, b_out, |out, b_out| (self.folder)(out, b_out));
+                    out = D::Mode::combine(out, b_out, |out, b_out| (self.folder)(out, b_out));
                 }
 
                 Ok(None) => break Ok(out),
@@ -3055,20 +3059,20 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O>
     where
         Self: Sized,
     {
         let before_all = inp.cursor();
-        let mut out = self.parser_a.go::<M>(inp)?;
-        let mut iter_state = self.parser_b.make_iter::<M>(inp)?;
+        let mut out = self.parser_a.go::<D>(inp)?;
+        let mut iter_state = self.parser_b.make_iter::<D>(inp)?;
         loop {
             match self
                 .parser_b
-                .next::<M>(inp, &mut iter_state, IterParserDebug::new(false))
+                .next::<D>(inp, &mut iter_state, IterParserDebug::new(false))
             {
                 Ok(Some(b_out)) => {
-                    out = M::combine(out, b_out, |out, b_out| {
+                    out = D::Mode::combine(out, b_out, |out, b_out| {
                         (self.folder)(out, b_out, &mut MapExtra::new(&before_all, inp))
                     })
                 }
@@ -3097,24 +3101,24 @@ where
     A: Parser<'src, I, O, E>,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         let before = inp.save();
         let old_alt = inp.take_alt();
-        let res = self.parser.go::<M>(inp);
+        let res = self.parser.go::<D>(inp);
         let new_alt = inp.take_alt();
 
         inp.errors.alt = old_alt;
         if res.is_ok() {
             if let Some(new_alt) = new_alt {
                 if I::cursor_location(&before.cursor().inner) >= I::cursor_location(&new_alt.pos) {
-                    inp.add_alt_err(&new_alt.pos, new_alt.err);
+                    inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
                 }
             }
             inp.rewind_input(before);
         } else {
             // Can't fail!
             let new_alt = new_alt.unwrap();
-            inp.add_alt_err(&new_alt.pos, new_alt.err);
+            inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
         }
 
         res
@@ -3144,13 +3148,13 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O>
     where
         Self: Sized,
     {
         (&self.parser)
             .map_err_with_state(|e, _, _| (self.mapper)(e))
-            .go::<M>(inp)
+            .go::<D>(inp)
     }
 
     go_extra!(O);
@@ -3171,12 +3175,12 @@ where
 //     F: Fn(E::Error, I::Span) -> E::Error,
 // {
 //     #[inline(always)]
-//     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
+//     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O>
 //     where
 //         Self: Sized,
 //     {
 //         let start = inp.cursor();
-//         let res = self.parser.go::<M>(inp);
+//         let res = self.parser.go::<D>(inp);
 
 //         if res.is_err() {
 //             let mut e = inp.take_alt();
@@ -3207,19 +3211,19 @@ where
     F: Fn(E::Error, I::Span, &mut E::State) -> E::Error,
 {
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O>
     where
         Self: Sized,
     {
         let start = inp.cursor();
         let old_alt = inp.take_alt();
-        let res = self.parser.go::<M>(inp);
+        let res = self.parser.go::<D>(inp);
         let new_alt = inp.take_alt();
 
         if res.is_ok() {
             inp.errors.alt = old_alt;
             if let Some(new_alt) = new_alt {
-                inp.add_alt_err(&new_alt.pos, new_alt.err);
+                inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
             }
         } else {
             // Can't fail!
@@ -3228,7 +3232,7 @@ where
             new_alt.err = (self.mapper)(new_alt.err, span, inp.state());
 
             inp.errors.alt = old_alt;
-            inp.add_alt_err(&new_alt.pos, new_alt.err);
+            inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
         }
 
         res
@@ -3270,19 +3274,19 @@ where
     }
 
     #[inline(always)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, U>
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, U>
     where
         Self: Sized,
     {
         let before = inp.cursor();
-        let out = self.parser.go::<Emit>(inp)?;
+        let out = self.parser.go::<DoEmit<D>>(inp)?;
 
         let mut emitter = Emitter::new();
         let out = (self.validator)(out, &mut MapExtra::new(&before, inp), &mut emitter);
         for err in emitter.errors() {
-            inp.emit_at(before.clone(), err);
+            inp.emit_at::<D>(before.clone(), err);
         }
-        Ok(M::bind(|| out))
+        Ok(D::Mode::bind(|| out))
     }
 
     go_extra!(U);
@@ -3303,19 +3307,19 @@ where
 //     F: Fn(E::Error) -> Result<O, E::Error>,
 // {
 //     #[inline(always)]
-//     fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
+//     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O>
 //     where
 //         Self: Sized,
 //     {
 //         let before = inp.save();
-//         match self.parser.go::<M>(inp) {
+//         match self.parser.go::<D>(inp) {
 //             Ok(out) => Ok(out),
 //             Err(()) => {
 //                 let err = inp.take_alt();
 //                 match (self.or_else)(err.err) {
 //                     Ok(out) => {
 //                         inp.rewind(before);
-//                         Ok(M::bind(|| out))
+//                         Ok(D::Mode::bind(|| out))
 //                     }
 //                     Err(new_err) => {
 //                         inp.errors.alt = Some(Located {
@@ -3345,8 +3349,8 @@ where
     A: Parser<'src, I, O, E>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-        Self::go_cfg::<M>(self, inp, true)
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+        Self::go_cfg::<D>(self, inp, true)
     }
 
     go_extra!(O);
@@ -3361,17 +3365,17 @@ where
     type Config = bool;
 
     #[inline]
-    fn go_cfg<M: Mode>(
+    fn go_cfg<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         cfg: Self::Config,
-    ) -> PResult<M, O> {
+    ) -> PResult<D::Mode, O> {
         let before = inp.cursor();
         if cfg {
-            self.inner.go::<M>(inp)
+            self.inner.go::<D>(inp)
         } else {
             let err_span = inp.span_since(&before);
-            inp.add_alt([DefaultExpected::SomethingElse], None, err_span);
+            inp.add_alt::<D, _, _>([DefaultExpected::SomethingElse], None, err_span);
             Err(())
         }
     }

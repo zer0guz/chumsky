@@ -23,11 +23,19 @@ macro_rules! go_extra {
     ( $O :ty ) => {
         #[inline(always)]
         fn go_emit(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<Emit, $O> {
-            Parser::<I, $O, E>::go::<Emit>(self, inp)
+            Parser::<I, $O, E>::go::<EmitRecover>(self, inp)
         }
         #[inline(always)]
         fn go_check(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<Check, $O> {
-            Parser::<I, $O, E>::go::<Check>(self, inp)
+            Parser::<I, $O, E>::go::<CheckRecover>(self, inp)
+        }
+        #[inline(always)]
+        fn go_emit_strict(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<Emit, $O> {
+            Parser::<I, $O, E>::go::<EmitStrict>(self, inp)
+        }
+        #[inline(always)]
+        fn go_check_strict(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<Check, $O> {
+            Parser::<I, $O, E>::go::<CheckStrict>(self, inp)
         }
     };
 }
@@ -92,7 +100,7 @@ pub mod prelude {
     pub use crate::{select, select_ref};
 }
 
-use crate::input::InputOwn;
+use crate::{input::InputOwn, private::Driver};
 use alloc::{
     boxed::Box,
     rc::{self, Rc},
@@ -126,11 +134,10 @@ use self::{
     input::{
         BorrowInput, Emitter, ExactSizeInput, InputRef, MapExtra, SliceInput, StrInput, ValueInput,
     },
-    inspector::Inspector,
     label::{LabelError, Labelled, LabelledWith},
     prelude::*,
     primitive::Any,
-    private::{Check, Emit, IPResult, Located, MaybeUninitExt, Mode, PResult, Sealed},
+    private::*,
     recovery::{RecoverWith, Strategy},
     span::{Span, WrappingSpan},
     text::*,
@@ -347,7 +354,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     }
 
     #[doc(hidden)]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O>
     where
         Self: Sized;
 
@@ -355,6 +362,10 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     fn go_emit(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<Emit, O>;
     #[doc(hidden)]
     fn go_check(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<Check, O>;
+    #[doc(hidden)]
+    fn go_emit_strict(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<Emit, O>;
+    #[doc(hidden)]
+    fn go_check_strict(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<Check, O>;
 
     /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
     ///
@@ -387,7 +398,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     {
         let mut own = InputOwn::new_state(input, state);
         let mut inp = own.as_ref_start();
-        let res = self.then_ignore(end()).go::<Emit>(&mut inp);
+        let res = self.then_ignore(end()).go::<EmitStrict>(&mut inp);
         let alt = inp.take_alt().map(|alt| alt.err).unwrap_or_else(|| {
             let fake_span = inp.span_since(&inp.cursor());
             // TODO: Why is this needed?
@@ -436,7 +447,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     {
         let mut own = InputOwn::new_state(input, state);
         let mut inp = own.as_ref_start();
-        let res = self.then_ignore(end()).go::<Check>(&mut inp);
+        let res = self.then_ignore(end()).go::<CheckRecover>(&mut inp);
         let alt = inp.take_alt().map(|alt| alt.err).unwrap_or_else(|| {
             let fake_span = inp.span_since(&inp.cursor());
             // TODO: Why is this needed?
@@ -2407,7 +2418,7 @@ where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
 {
-    fn go<M: Mode>(&self, _inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+    fn go<D: Driver>(&self, _inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         *self
     }
 
@@ -2439,11 +2450,11 @@ where
     type Config: Default;
 
     #[doc(hidden)]
-    fn go_cfg<M: Mode>(
+    fn go_cfg<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         cfg: Self::Config,
-    ) -> PResult<M, O>;
+    ) -> PResult<D::Mode, O>;
 
     #[doc(hidden)]
     #[inline(always)]
@@ -2452,7 +2463,7 @@ where
         inp: &mut InputRef<'src, '_, I, E>,
         cfg: Self::Config,
     ) -> PResult<Emit, O> {
-        self.go_cfg::<Emit>(inp, cfg)
+        self.go_cfg::<EmitRecover>(inp, cfg)
     }
     #[doc(hidden)]
     #[inline(always)]
@@ -2461,7 +2472,7 @@ where
         inp: &mut InputRef<'src, '_, I, E>,
         cfg: Self::Config,
     ) -> PResult<Check, O> {
-        self.go_cfg::<Check>(inp, cfg)
+        self.go_cfg::<CheckRecover>(inp, cfg)
     }
 
     /// A combinator that allows configuration of the parser from the current context. Context
@@ -2558,13 +2569,13 @@ where
         let iter_state = match &mut self.iter_state {
             Some(state) => state,
             None => {
-                let state = parser.make_iter::<Emit>(&mut inp).ok()?;
+                let state = parser.make_iter::<DoEmit<D>>(&mut inp).ok()?;
                 self.iter_state = Some(state);
                 self.iter_state.as_mut().unwrap()
             }
         };
 
-        let res = parser.next::<Emit>(&mut inp, iter_state, IterParserDebug::new(true));
+        let res = parser.next::<DoEmit<D>>(&mut inp, iter_state, IterParserDebug::new(true));
         // TODO: Avoid clone
         self.own.start = inp.cursor().inner;
         res.ok().and_then(|res| res)
@@ -2578,22 +2589,22 @@ where
     E: ParserExtra<'src, I>,
 {
     #[doc(hidden)]
-    type IterState<M: Mode>
+    type IterState<D: Driver>
     where
         I: 'src;
 
     #[doc(hidden)]
-    fn make_iter<M: Mode>(
+    fn make_iter<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-    ) -> PResult<Emit, Self::IterState<M>>;
+    ) -> PResult<Emit, Self::IterState<D>>;
     #[doc(hidden)]
-    fn next<M: Mode>(
+    fn next<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-        state: &mut Self::IterState<M>,
+        state: &mut Self::IterState<D>,
         debug: IterParserDebug,
-    ) -> IPResult<M, O>;
+    ) -> IPResult<D::Mode, O>;
 
     #[doc(hidden)]
     #[cfg(feature = "debug")]
@@ -2883,7 +2894,7 @@ where
         };
         let out = f(&mut iter);
         let mut inp = iter.own.as_ref_start();
-        let res = end().go::<Emit>(&mut inp);
+        let res = end().go::<DoEmit<D>>(&mut inp);
         let alt = inp.take_alt().map(|alt| alt.err).unwrap_or_else(|| {
             let fake_span = inp.span_since(&inp.cursor());
             // TODO: Why is this needed?
@@ -2909,13 +2920,13 @@ where
     type Config: Default;
 
     #[doc(hidden)]
-    fn next_cfg<M: Mode>(
+    fn next_cfg<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-        state: &mut Self::IterState<M>,
+        state: &mut Self::IterState<D>,
         cfg: &Self::Config,
         debug: IterParserDebug,
-    ) -> IPResult<M, O>;
+    ) -> IPResult<D::Mode, O>;
 
     /// A combinator that allows configuration of the parser from the current context
     fn configure<F>(self, cfg: F) -> IterConfigure<Self, F, O>
@@ -2975,8 +2986,8 @@ where
     }
 
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-        M::invoke(&*self.inner, inp)
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+        D::invoke(&*self.inner, inp)
     }
 
     fn boxed<'c>(self) -> Boxed<'src, 'c, I, O, E>
@@ -2997,11 +3008,11 @@ where
     T: Parser<'src, I, O, E>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O>
     where
         Self: Sized,
     {
-        T::go::<M>(self, inp)
+        T::go::<D>(self, inp)
     }
 
     go_extra!(O);
@@ -3014,11 +3025,11 @@ where
     T: Parser<'src, I, O, E>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O>
     where
         Self: Sized,
     {
-        T::go::<M>(self, inp)
+        T::go::<D>(self, inp)
     }
 
     go_extra!(O);
@@ -3031,11 +3042,11 @@ where
     T: Parser<'src, I, O, E>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O>
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O>
     where
         Self: Sized,
     {
-        T::go::<M>(self, inp)
+        T::go::<D>(self, inp)
     }
 
     go_extra!(O);

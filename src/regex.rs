@@ -35,7 +35,7 @@ where
     E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, &'src S> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, &'src S> {
         let before = inp.cursor();
 
         let re_in = ReInput::new(inp.full_slice())
@@ -52,7 +52,7 @@ where
                     inp.skip_bytes(len);
                 }
                 let after = inp.cursor();
-                Ok(M::bind(|| inp.slice(&before..&after)))
+                Ok(D::Mode::bind(|| inp.slice(&before..&after)))
             }
             None => {
                 // TODO: Improve error

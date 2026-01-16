@@ -130,7 +130,7 @@ macro_rules! op_check_and_emit {
             >,
             f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Emit, O>,
         ) -> OperatorResult<<Emit as Mode>::Output<O>, ()> {
-            self.do_parse_prefix::<Emit>(inp, pre_expr, &f)
+            self.do_parse_prefix::<DoEmit<D>>(inp, pre_expr, &f)
         }
         #[inline(always)]
         fn do_parse_postfix_check<'parse>(
@@ -162,7 +162,7 @@ macro_rules! op_check_and_emit {
             lhs: O,
             min_power: i32,
         ) -> OperatorResult<O, O> {
-            self.do_parse_postfix::<Emit>(inp, pre_expr, pre_op, lhs, min_power)
+            self.do_parse_postfix::<DoEmit<D>>(inp, pre_expr, pre_op, lhs, min_power)
         }
         #[inline(always)]
         fn do_parse_infix_check<'parse>(
@@ -196,7 +196,7 @@ macro_rules! op_check_and_emit {
             min_power: i32,
             f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Emit, O>,
         ) -> OperatorResult<O, O> {
-            self.do_parse_infix::<Emit>(inp, pre_expr, pre_op, lhs, min_power, &f)
+            self.do_parse_infix::<DoEmit<D>>(inp, pre_expr, pre_op, lhs, min_power, &f)
         }
     };
 }
@@ -217,7 +217,7 @@ where
 
     #[doc(hidden)]
     #[inline(always)]
-    fn do_parse_prefix<'parse, M: Mode>(
+    fn do_parse_prefix<'parse, D: Driver>(
         &self,
         _inp: &mut InputRef<'src, 'parse, I, E>,
         _pre_expr: &input::Checkpoint<
@@ -226,7 +226,7 @@ where
             I,
             <E::State as Inspector<'src, I>>::Checkpoint,
         >,
-        _f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<M, O>,
+        _f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
     ) -> OperatorResult<M::Output<O>, ()>
     where
         Self: Sized,
@@ -236,7 +236,7 @@ where
 
     #[doc(hidden)]
     #[inline(always)]
-    fn do_parse_postfix<'parse, M: Mode>(
+    fn do_parse_postfix<'parse, D: Driver>(
         &self,
         _inp: &mut InputRef<'src, 'parse, I, E>,
         _pre_expr: &input::Cursor<'src, 'parse, I>,
@@ -252,14 +252,14 @@ where
 
     #[doc(hidden)]
     #[inline(always)]
-    fn do_parse_infix<'parse, M: Mode>(
+    fn do_parse_infix<'parse, D: Driver>(
         &self,
         _inp: &mut InputRef<'src, 'parse, I, E>,
         _pre_expr: &input::Cursor<'src, 'parse, I>,
         _pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: M::Output<O>,
         _min_power: i32,
-        _f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<M, O>,
+        _f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
     ) -> OperatorResult<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
@@ -336,11 +336,11 @@ where
     E: ParserExtra<'src, I>,
 {
     #[inline(always)]
-    fn do_parse_prefix<'parse, M: Mode>(
+    fn do_parse_prefix<'parse, D: Driver>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<M, O>,
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
     ) -> OperatorResult<M::Output<O>, ()>
     where
         Self: Sized,
@@ -349,7 +349,7 @@ where
     }
 
     #[inline(always)]
-    fn do_parse_postfix<'parse, M: Mode>(
+    fn do_parse_postfix<'parse, D: Driver>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
@@ -364,14 +364,14 @@ where
     }
 
     #[inline(always)]
-    fn do_parse_infix<'parse, M: Mode>(
+    fn do_parse_infix<'parse, D: Driver>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: M::Output<O>,
         min_power: i32,
-        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<M, O>,
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
     ) -> OperatorResult<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
@@ -564,19 +564,19 @@ where
     F: Fn(O, Op, O, &mut MapExtra<'src, '_, I, E>) -> O,
 {
     #[inline]
-    fn do_parse_infix<'parse, M: Mode>(
+    fn do_parse_infix<'parse, D: Driver>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         lhs: M::Output<O>,
         min_power: i32,
-        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<M, O>,
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
     ) -> OperatorResult<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
-        match self.op_parser.go::<M>(inp) {
+        match self.op_parser.go::<D>(inp) {
             Ok(op) => {
                 let binding_power = self.associativity.left_power();
 
@@ -587,8 +587,8 @@ where
                 };
                 if power_check {
                     match f(inp, self.associativity.right_power()) {
-                        Ok(rhs) => OperatorResult::Ok(M::combine(
-                            M::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
+                        Ok(rhs) => OperatorResult::Ok(D::Mode::combine(
+                            D::Mode::combine(lhs, rhs, |lhs, rhs| (lhs, rhs)),
                             op,
                             |(lhs, rhs), op| {
                                 (self.fold)(lhs, op, rhs, &mut MapExtra::new(pre_expr, inp))
@@ -676,18 +676,18 @@ where
     F: Fn(Op, O, &mut MapExtra<'src, '_, I, E>) -> O,
 {
     #[inline]
-    fn do_parse_prefix<'parse, M: Mode>(
+    fn do_parse_prefix<'parse, D: Driver>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<M, O>,
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
     ) -> OperatorResult<M::Output<O>, ()>
     where
         Self: Sized,
     {
-        match self.op_parser.go::<M>(inp) {
+        match self.op_parser.go::<D>(inp) {
             Ok(op) => match f(inp, self.binding_power) {
-                Ok(rhs) => OperatorResult::Ok(M::combine(op, rhs, |op, rhs| {
+                Ok(rhs) => OperatorResult::Ok(D::Mode::combine(op, rhs, |op, rhs| {
                     (self.fold)(op, rhs, &mut MapExtra::new(pre_expr.cursor(), inp))
                 })),
                 Err(()) => {
@@ -761,7 +761,7 @@ where
     F: Fn(O, Op, &mut MapExtra<'src, '_, I, E>) -> O,
 {
     #[inline]
-    fn do_parse_postfix<'parse, M: Mode>(
+    fn do_parse_postfix<'parse, D: Driver>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
@@ -773,8 +773,8 @@ where
         Self: Sized,
     {
         if self.binding_power >= min_power {
-            match self.op_parser.go::<M>(inp) {
-                Ok(op) => OperatorResult::Ok(M::combine(lhs, op, |lhs, op| {
+            match self.op_parser.go::<D>(inp) {
+                Ok(op) => OperatorResult::Ok(D::Mode::combine(lhs, op, |lhs, op| {
                     (self.fold)(lhs, op, &mut MapExtra::new(pre_expr, inp))
                 })),
                 Err(()) => {
@@ -812,18 +812,18 @@ macro_rules! impl_operator_for_tuple {
                 $($X: Operator<'src, I, O, E>),*
         {
             #[inline]
-            fn do_parse_prefix<'parse, M: Mode>(
+            fn do_parse_prefix<'parse, D: Driver>(
                 &self,
                 inp: &mut InputRef<'src, 'parse, I, E>,
                 pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-                f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<M, O>,
+                f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
             ) -> OperatorResult<M::Output<O>, ()>
             where
                 Self: Sized,
             {
                 let ($($X,)*) = self;
                 $(
-                    match $X.do_parse_prefix::<M>(inp, pre_expr, f) {
+                    match $X.do_parse_prefix::<D>(inp, pre_expr, f) {
                         OperatorResult::NoMatch(out) => {},
                         result => return result,
                     }
@@ -832,7 +832,7 @@ macro_rules! impl_operator_for_tuple {
             }
 
             #[inline]
-            fn do_parse_postfix<'parse, M: Mode>(
+            fn do_parse_postfix<'parse, D: Driver>(
                 &self,
                 inp: &mut InputRef<'src, 'parse, I, E>,
                 pre_expr: &input::Cursor<'src, 'parse, I>,
@@ -845,7 +845,7 @@ macro_rules! impl_operator_for_tuple {
             {
                 let ($($X,)*) = self;
                 $(
-                    match $X.do_parse_postfix::<M>(inp, pre_expr, pre_op, lhs, min_power) {
+                    match $X.do_parse_postfix::<D>(inp, pre_expr, pre_op, lhs, min_power) {
                         OperatorResult::NoMatch(out) => lhs = out,
                         result => return result,
                     }
@@ -854,21 +854,21 @@ macro_rules! impl_operator_for_tuple {
             }
 
             #[inline]
-            fn do_parse_infix<'parse, M: Mode>(
+            fn do_parse_infix<'parse, D: Driver>(
                 &self,
                 inp: &mut InputRef<'src, 'parse, I, E>,
                 pre_expr: &input::Cursor<'src, 'parse, I>,
                 pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
                 mut lhs: M::Output<O>,
                 min_power: i32,
-                f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<M, O>,
+                f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
             ) -> OperatorResult<M::Output<O>, M::Output<O>>
             where
                 Self: Sized,
             {
                 let ($($X,)*) = self;
                 $(
-                    match $X.do_parse_infix::<M>(inp, pre_expr, pre_op, lhs, min_power, f) {
+                    match $X.do_parse_infix::<D>(inp, pre_expr, pre_op, lhs, min_power, f) {
                         OperatorResult::NoMatch(out) => lhs = out,
                         result => return result,
                     }
@@ -891,17 +891,17 @@ where
     Op: Operator<'src, I, O, E>,
 {
     #[inline]
-    fn do_parse_prefix<'parse, M: Mode>(
+    fn do_parse_prefix<'parse, D: Driver>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<M, O>,
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
     ) -> OperatorResult<M::Output<O>, ()>
     where
         Self: Sized,
     {
         for op in self {
-            match op.do_parse_prefix::<M>(inp, pre_expr, f) {
+            match op.do_parse_prefix::<D>(inp, pre_expr, f) {
                 OperatorResult::NoMatch(()) => {}
                 result => return result,
             }
@@ -910,7 +910,7 @@ where
     }
 
     #[inline]
-    fn do_parse_postfix<'parse, M: Mode>(
+    fn do_parse_postfix<'parse, D: Driver>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
@@ -922,7 +922,7 @@ where
         Self: Sized,
     {
         for op in self {
-            match op.do_parse_postfix::<M>(inp, pre_expr, pre_op, lhs, min_power) {
+            match op.do_parse_postfix::<D>(inp, pre_expr, pre_op, lhs, min_power) {
                 OperatorResult::NoMatch(out) => lhs = out,
                 result => return result,
             }
@@ -931,20 +931,20 @@ where
     }
 
     #[inline]
-    fn do_parse_infix<'parse, M: Mode>(
+    fn do_parse_infix<'parse, D: Driver>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         mut lhs: M::Output<O>,
         min_power: i32,
-        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<M, O>,
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
     ) -> OperatorResult<M::Output<O>, M::Output<O>>
     where
         Self: Sized,
     {
         for op in self {
-            match op.do_parse_infix::<M>(inp, pre_expr, pre_op, lhs, min_power, f) {
+            match op.do_parse_infix::<D>(inp, pre_expr, pre_op, lhs, min_power, f) {
                 OperatorResult::NoMatch(out) => lhs = out,
                 result => return result,
             }
@@ -958,11 +958,11 @@ where
 #[allow(unused_variables, non_snake_case)]
 impl<'src, Atom, Ops> Pratt<Atom, Ops> {
     #[inline]
-    fn pratt_go<M: Mode, I, O, E>(
+    fn pratt_go<D: Driver, I, O, E>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         min_power: i32,
-    ) -> PResult<M, O>
+    ) -> PResult<D::Mode, O>
     where
         I: Input<'src>,
         E: ParserExtra<'src, I>,
@@ -973,11 +973,11 @@ impl<'src, Atom, Ops> Pratt<Atom, Ops> {
         // Prefix unary operators
         let mut lhs = match self
             .ops
-            .do_parse_prefix::<M>(inp, &pre_expr, &|inp, min_power| {
-                recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, min_power))
+            .do_parse_prefix::<D>(inp, &pre_expr, &|inp, min_power| {
+                recursive::recurse(|| self.pratt_go::<D::Mode, _, _, _>(inp, min_power))
             }) {
             OperatorResult::Ok(out) => out,
-            OperatorResult::NoMatch(()) => self.atom.go::<M>(inp)?,
+            OperatorResult::NoMatch(()) => self.atom.go::<D>(inp)?,
             OperatorResult::Err(()) => return Err(()),
         };
 
@@ -987,7 +987,7 @@ impl<'src, Atom, Ops> Pratt<Atom, Ops> {
             // Postfix unary operators
             match self
                 .ops
-                .do_parse_postfix::<M>(inp, pre_expr.cursor(), &pre_op, lhs, min_power)
+                .do_parse_postfix::<D>(inp, pre_expr.cursor(), &pre_op, lhs, min_power)
             {
                 OperatorResult::Ok(out) => {
                     lhs = out;
@@ -1001,14 +1001,14 @@ impl<'src, Atom, Ops> Pratt<Atom, Ops> {
             }
 
             // Infix binary operators
-            match self.ops.do_parse_infix::<M>(
+            match self.ops.do_parse_infix::<D>(
                 inp,
                 pre_expr.cursor(),
                 &pre_op,
                 lhs,
                 min_power,
                 &|inp, min_power| {
-                    recursive::recurse(|| self.pratt_go::<M, _, _, _>(inp, min_power))
+                    recursive::recurse(|| self.pratt_go::<D::Mode, _, _, _>(inp, min_power))
                 },
             ) {
                 OperatorResult::Ok(out) => {
@@ -1038,8 +1038,8 @@ where
     Atom: Parser<'src, I, O, E>,
     Ops: Operator<'src, I, O, E>,
 {
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-        self.pratt_go::<M, _, _, _>(inp, i32::MIN)
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+        self.pratt_go::<D::Mode, _, _, _>(inp, i32::MIN)
     }
 
     go_extra!(O);

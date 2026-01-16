@@ -14,13 +14,13 @@ where
     fn go<M: crate::private::Mode>(
         &self,
         inp: &mut crate::input::InputRef<'src, '_, I, E>,
-    ) -> crate::private::PResult<M, O>
+    ) -> crate::private::PResult<D::Mode, O>
     where
         Self: Sized,
     {
         match self {
-            Either::Left(l) => L::go::<M>(l, inp),
-            Either::Right(r) => R::go::<M>(r, inp),
+            Either::Left(l) => L::go::<D>(l, inp),
+            Either::Right(r) => R::go::<D>(r, inp),
         }
     }
 

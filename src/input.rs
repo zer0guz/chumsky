@@ -1610,7 +1610,7 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
     ///
     /// You have been warned.
     pub fn parse<O, P: Parser<'src, I, O, E>>(&mut self, parser: P) -> Result<O, E::Error> {
-        match parser.go::<Emit>(self) {
+        match parser.go::<EmitRecover>(self) {
             Ok(out) => Ok(out),
             // Can't fail!
             Err(()) => Err(self.take_alt().unwrap().err),
@@ -1623,7 +1623,7 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
     ///
     /// See [`InputRef::parse`] about unspecified behavior associated with this function.
     pub fn check<O, P: Parser<'src, I, O, E>>(&mut self, parser: P) -> Result<(), E::Error> {
-        match parser.go::<Check>(self) {
+        match parser.go::<CheckRecover>(self) {
             Ok(()) => Ok(()),
             // Can't fail!
             Err(()) => Err(self.take_alt().unwrap().err),
@@ -1794,13 +1794,19 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
     /// Emits a non-fatal error at the current position. This is equivalent to
     /// `emit_at(self.cursor(), error)`.
     #[inline]
-    pub fn emit(&mut self, error: E::Error) {
+    pub fn emit<D: Driver>(&mut self, error: E::Error) {
+        if D::Policy::STRICT {
+            return;
+        }
         self.emit_inner(None, error);
     }
 
     /// Emits a non-fatal error at the given cursor position.
     #[inline]
-    pub fn emit_at(&mut self, cursor: Cursor<'src, 'parse, I>, error: E::Error) {
+    pub fn emit_at<D: Driver>(&mut self, cursor: Cursor<'src, 'parse, I>, error: E::Error) {
+        if D::Policy::STRICT {
+            return;
+        }
         self.emit_inner(Some(cursor), error);
     }
 
@@ -1814,7 +1820,7 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
     }
 
     #[inline]
-    pub(crate) fn add_alt<Exp, L>(
+    pub(crate) fn add_alt<D: Driver, Exp, L>(
         &mut self,
         expected: Exp,
         found: Option<MaybeRef<'src, I::Token>>,
@@ -1823,6 +1829,9 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
         Exp: IntoIterator<Item = L>,
         E::Error: LabelError<'src, I, L>,
     {
+        if D::Policy::STRICT {
+            return;
+        }
         // Fast path: if the error doesn't carry meaningful information, avoid unnecessary decision-making!
         if core::mem::size_of::<E::Error>() == 0 {
             self.errors.alt = Some(Located::at(
@@ -1854,7 +1863,10 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
     }
 
     #[inline]
-    pub(crate) fn add_alt_err(&mut self, at: &I::Cursor, err: E::Error) {
+    pub(crate) fn add_alt_err<D: Driver>(&mut self, at: &I::Cursor, err: E::Error) {
+        if D::Policy::STRICT {
+            return;
+        }
         // Fast path: if the error doesn't carry meaningful information, avoid unnecessary decision-making!
         if core::mem::size_of::<E::Error>() == 0 {
             self.errors.alt = Some(Located::at(self.cursor.clone(), err));

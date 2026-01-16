@@ -179,9 +179,9 @@ where
     }
 
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         recurse(move || {
-            M::invoke(
+            D::invoke(
                 self.parser()
                     .inner
                     .get()
@@ -213,8 +213,8 @@ where
     }
 
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-        recurse(move || M::invoke(&*self.parser(), inp))
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+        recurse(move || D::invoke(&*self.parser(), inp))
     }
 
     go_extra!(O);

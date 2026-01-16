@@ -37,11 +37,11 @@ pub trait Strategy<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Def
     // Attempt to recover from a parsing failure.
     // The strategy should properly handle the alt error but is not required to handle rewinding.
     #[doc(hidden)]
-    fn recover<M: Mode, P: Parser<'src, I, O, E>>(
+    fn recover<D: Driver, P: Parser<'src, I, O, E>>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         parser: &P,
-    ) -> PResult<M, O>;
+    ) -> PResult<D::Mode, O>;
 }
 
 /// See [`via_parser`].
@@ -60,20 +60,20 @@ where
     A: Parser<'src, I, O, E>,
     E: ParserExtra<'src, I>,
 {
-    fn recover<M: Mode, P: Parser<'src, I, O, E>>(
+    fn recover<D: Driver, P: Parser<'src, I, O, E>>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         _parser: &P,
-    ) -> PResult<M, O> {
+    ) -> PResult<D::Mode, O> {
         let alt = inp.take_alt().unwrap(); // Can't fail!
-        let out = match self.0.go::<M>(inp) {
+        let out = match self.0.go::<D>(inp) {
             Ok(out) => out,
             Err(()) => {
                 inp.errors.alt = Some(alt);
                 return Err(());
             }
         };
-        inp.emit(alt.err);
+        inp.emit::<D>(alt.err);
         Ok(out)
     }
 }
@@ -98,18 +98,22 @@ where
         self.parser.node_info(scope)
     }
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         let before = inp.save();
-        match self.parser.go::<M>(inp) {
+        match self.parser.go::<D>(inp) {
             Ok(out) => Ok(out),
             Err(()) => {
-                inp.rewind(before.clone());
-                match self.strategy.recover::<M, _>(inp, &self.parser) {
-                    Ok(out) => Ok(out),
-                    Err(()) => {
-                        // Reset to before fallback attempt
-                        inp.rewind(before);
-                        Err(())
+                if <D::Policy as Policy>::STRICT {
+                    Err(())
+                } else {
+                    inp.rewind(before.clone());
+                    match self.strategy.recover::<D, _>(inp, &self.parser) {
+                        Ok(out) => Ok(out),
+                        Err(()) => {
+                            // Reset to before fallback attempt
+                            inp.rewind(before);
+                            Err(())
+                        }
                     }
                 }
             }
@@ -135,15 +139,15 @@ where
     U: Parser<'src, I, (), E>,
     E: ParserExtra<'src, I>,
 {
-    fn recover<M: Mode, P: Parser<'src, I, O, E>>(
+    fn recover<D: Driver, P: Parser<'src, I, O, E>>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         parser: &P,
-    ) -> PResult<M, O> {
+    ) -> PResult<D::Mode, O> {
         let alt = inp.take_alt().unwrap(); // Can't fail!
         loop {
             let before = inp.save();
-            if let Ok(()) = self.until.go::<Check>(inp) {
+            if let Ok(()) = self.until.go::<DoCheck<D>>(inp) {
                 inp.errors.alt = Some(alt);
                 inp.rewind(before);
                 break Err(());
@@ -151,18 +155,18 @@ where
                 inp.rewind(before);
             }
 
-            if let Err(()) = self.skip.go::<Check>(inp) {
+            if let Err(()) = self.skip.go::<DoCheck<D>>(inp) {
                 inp.errors.alt = Some(alt);
                 break Err(());
             }
 
             let before = inp.save();
-            if let Some(out) = parser.go::<M>(inp).ok().filter(|_| {
+            if let Some(out) = parser.go::<D>(inp).ok().filter(|_| {
                 inp.errors
                     .secondary_errors_since(before.err_count)
                     .is_empty()
             }) {
-                inp.emit(alt.err);
+                inp.emit::<D>(alt.err);
                 break Ok(out);
             } else {
                 inp.errors.alt.take();
@@ -195,21 +199,21 @@ where
     F: Fn() -> O,
     E: ParserExtra<'src, I>,
 {
-    fn recover<M: Mode, P: Parser<'src, I, O, E>>(
+    fn recover<D: Driver, P: Parser<'src, I, O, E>>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         _parser: &P,
-    ) -> PResult<M, O> {
+    ) -> PResult<D::Mode, O> {
         let alt = inp.take_alt().unwrap(); // Can't fail!
         loop {
             let before = inp.save();
-            if let Ok(()) = self.until.go::<Check>(inp) {
-                inp.emit(alt.err);
-                break Ok(M::bind(|| (self.fallback)()));
+            if let Ok(()) = self.until.go::<DoCheck<D>>(inp) {
+                inp.emit::<D>(alt.err);
+                break Ok(D::Mode::bind(|| (self.fallback)()));
             }
             inp.rewind(before);
 
-            if let Err(()) = self.skip.go::<Check>(inp) {
+            if let Err(()) = self.skip.go::<DoCheck<D>>(inp) {
                 inp.errors.alt = Some(alt);
                 break Err(());
             }

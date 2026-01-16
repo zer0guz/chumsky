@@ -55,7 +55,7 @@ pub trait Mode {
     fn get_or<T, F: FnOnce() -> T>(r: Self::Output<T>, f: F) -> T;
 
     /// Invoke a parser user the current mode. This is normally equivalent to
-    /// [`parser.go::<M>(inp)`](Parser::go), but it can be called on unsized values such as
+    /// [`parser.go::<D>(inp)`](Parser::go), but it can be called on unsized values such as
     /// `dyn Parser`.
     fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
     where
@@ -63,8 +63,17 @@ pub trait Mode {
         E: ParserExtra<'a, I>,
         P: Parser<'a, I, O, E> + ?Sized;
 
+    fn invoke_strict<'a, I, O, E, P>(
+        parser: &P,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Self, O>
+    where
+        I: Input<'a>,
+        E: ParserExtra<'a, I>,
+        P: Parser<'a, I, O, E> + ?Sized;
+
     /// Invoke a parser with configuration using the current mode. This is normally equivalent
-    /// to [`parser.go::<M>(inp)`](ConfigParser::go_cfg), but it can be called on unsized values
+    /// to [`parser.go::<D>(inp)`](ConfigParser::go_cfg), but it can be called on unsized values
     /// such as `dyn Parser`.
     fn invoke_cfg<'a, I, O, E, P>(
         parser: &P,
@@ -170,7 +179,20 @@ impl Mode for Emit {
         E: ParserExtra<'a, I>,
         P: Parser<'a, I, O, E> + ?Sized,
     {
+        panic!();
+
         parser.go_emit(inp)
+    }
+    fn invoke_strict<'a, I, O, E, P>(
+        parser: &P,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Self, O>
+    where
+        I: Input<'a>,
+        E: ParserExtra<'a, I>,
+        P: Parser<'a, I, O, E> + ?Sized,
+    {
+        parser.go_emit_strict(inp)
     }
 
     #[inline(always)]
@@ -281,7 +303,20 @@ impl Mode for Check {
         E: ParserExtra<'a, I>,
         P: Parser<'a, I, O, E> + ?Sized,
     {
+        panic!();
         parser.go_check(inp)
+    }
+
+    fn invoke_strict<'a, I, O, E, P>(
+        parser: &P,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Self, O>
+    where
+        I: Input<'a>,
+        E: ParserExtra<'a, I>,
+        P: Parser<'a, I, O, E> + ?Sized,
+    {
+        parser.go_check_strict(inp)
     }
 
     #[inline(always)]
@@ -370,5 +405,91 @@ impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
         (&uninit as *const [Self; N] as *const [T; N]).read()
     }
 }
+
+pub trait Policy {
+    const STRICT: bool;
+}
+pub type DoEmit<D: Driver> = D::WithMode<Emit>;
+pub type DoCheck<D: Driver> = D::WithMode<Check>;
+pub trait Driver {
+    type Mode: Mode;
+    type Policy: Policy;
+
+    type WithMode<M: Mode>: Driver<Mode = M, Policy = Self::Policy>;
+    type WithPolicy<P: Policy>: Driver<Mode = Self::Mode, Policy = P>;
+
+    fn invoke<'a, I, O, E, P>(
+        parser: &P,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Self::Mode, O>
+    where
+        I: Input<'a>,
+        E: ParserExtra<'a, I>,
+        P: Parser<'a, I, O, E> + ?Sized;
+
+    fn invoke_cfg<'a, I, O, E, P>(
+        parser: &P,
+        inp: &mut InputRef<'a, '_, I, E>,
+        cfg: P::Config,
+    ) -> PResult<Self::Mode, O>
+    where
+        I: Input<'a>,
+        E: ParserExtra<'a, I>,
+        P: ConfigParser<'a, I, O, E> + ?Sized;
+}
+
+pub struct Drive<M: Mode, P: Policy>(PhantomData<fn() -> (M, P)>);
+
+impl<M: Mode, P: Policy> Driver for Drive<M, P> {
+    type Mode = M;
+    type Policy = P;
+
+    type WithMode<M2: Mode> = Drive<M2, P>;
+    type WithPolicy<P2: Policy> = Drive<M, P2>;
+
+    fn invoke<'a, I, O, E, Pa>(
+        parser: &Pa,
+        inp: &mut InputRef<'a, '_, I, E>,
+    ) -> PResult<Self::Mode, O>
+    where
+        I: Input<'a>,
+        E: ParserExtra<'a, I>,
+        Pa: Parser<'a, I, O, E> + ?Sized,
+    {
+        if Self::Policy::STRICT {
+            Self::Mode::invoke_strict(parser, inp)
+        } else {
+            Self::Mode::invoke(parser, inp)
+        }
+    }
+
+    fn invoke_cfg<'a, I, O, E, Pa>(
+        parser: &Pa,
+        inp: &mut InputRef<'a, '_, I, E>,
+        cfg: Pa::Config,
+    ) -> PResult<Self::Mode, O>
+    where
+        I: Input<'a>,
+        E: ParserExtra<'a, I>,
+        Pa: ConfigParser<'a, I, O, E> + ?Sized,
+    {
+        Self::Mode::invoke_cfg(parser, inp, cfg)
+    }
+}
+pub struct Strict;
+
+impl Policy for Strict {
+    const STRICT: bool = true;
+}
+pub struct Recover;
+
+impl Policy for Recover {
+    const STRICT: bool = false;
+}
+
+pub type EmitStrict = Drive<Emit, Strict>;
+pub type CheckStrict = Drive<Check, Strict>;
+pub type EmitRecover = Drive<Emit, Recover>;
+pub type CheckRecover = Drive<Check, Recover>;
 
 pub trait Sealed {}

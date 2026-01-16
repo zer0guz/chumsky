@@ -158,7 +158,7 @@ mod current {
         P: ExtParser<'src, I, O, E>,
     {
         #[inline(always)]
-        fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+        fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
             let before = inp.cursor();
             match M::choose(&mut *inp, |inp| self.0.parse(inp), |inp| self.0.check(inp)) {
                 Ok(out) => Ok(out),

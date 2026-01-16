@@ -101,13 +101,13 @@ where
     }
 
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         LabelledWith {
             is_context: self.is_context,
             is_builtin: self.is_builtin,
             ..(&self.parser).labelled_with(|| self.label.clone())
         }
-        .go::<M>(inp)
+        .go::<D>(inp)
     }
 
     go_extra!(O);
@@ -219,10 +219,10 @@ where
     }
 
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         let old_alt = inp.errors.alt.take();
         let before = inp.save();
-        let res = self.parser.go::<M>(inp);
+        let res = self.parser.go::<D>(inp);
 
         // TODO: Label secondary errors too?
         let new_alt = inp.errors.alt.take();
@@ -238,7 +238,7 @@ where
                 let span = unsafe { I::span(inp.cache, &before.cursor().inner..&new_alt.pos) };
                 new_alt.err.in_context((self.label)(), span);
             }
-            inp.add_alt_err(&new_alt.pos, new_alt.err);
+            inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
         }
 
         if self.is_context {

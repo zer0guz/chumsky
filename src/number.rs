@@ -38,13 +38,13 @@ where
     E::Error: LabelError<'src, I, ExpectedNumber>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         let before = inp.cursor();
         match parse_partial(inp.slice_trailing_inner().as_ref()) {
             Ok((out, skip)) => {
                 // SAFETY: `skip` is no longer than the trailing input's byte length
                 unsafe { inp.skip_bytes(skip) };
-                Ok(M::bind(|| out))
+                Ok(D::Mode::bind(|| out))
             }
             Err(_err) => {
                 // TODO: Improve error

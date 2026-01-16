@@ -205,9 +205,9 @@ where
         debug::NodeInfo::Padded(Box::new(self.parser.node_info(scope)))
     }
 
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         inp.skip_while(|c| c.is_whitespace());
-        let out = self.parser.go::<M>(inp)?;
+        let out = self.parser.go::<D>(inp)?;
         inp.skip_while(|c| c.is_whitespace());
         Ok(out)
     }

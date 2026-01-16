@@ -40,14 +40,14 @@ where
     E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ()> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, ()> {
         let before = inp.save();
         match inp.next_maybe_inner() {
-            None => Ok(M::bind(|| ())),
+            None => Ok(D::Mode::bind(|| ())),
             Some(tok) => {
                 let span = inp.span_since(before.cursor());
                 inp.rewind(before);
-                inp.add_alt([DefaultExpected::EndOfInput], Some(tok.into()), span);
+                inp.add_alt::<D,_,_>([DefaultExpected::EndOfInput], Some(tok.into()), span);
                 Err(())
             }
         }
@@ -79,8 +79,8 @@ where
     E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, _: &mut InputRef<'src, '_, I, E>) -> PResult<M, ()> {
-        Ok(M::bind(|| ()))
+    fn go<D: Driver>(&self, _: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, ()> {
+        Ok(D::Mode::bind(|| ()))
     }
 
     go_extra!(());
@@ -167,8 +167,8 @@ where
     }
 
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, T> {
-        Self::go_cfg::<M>(self, inp, JustCfg::default())
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, T> {
+        Self::go_cfg::<D>(self, inp, JustCfg::default())
     }
 
     go_extra!(T);
@@ -184,11 +184,11 @@ where
     type Config = JustCfg<T>;
 
     #[inline]
-    fn go_cfg<M: Mode>(
+    fn go_cfg<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         cfg: Self::Config,
-    ) -> PResult<M, T> {
+    ) -> PResult<D::Mode, T> {
         let seq = cfg.seq.as_ref().unwrap_or(&self.seq);
         for next in seq.seq_iter() {
             let before = inp.save();
@@ -197,7 +197,7 @@ where
                 found => {
                     let span = inp.span_since(before.cursor());
                     inp.rewind(before);
-                    inp.add_alt(
+                    inp.add_alt::<D,_,_>(
                         [DefaultExpected::Token(T::to_maybe_ref(next))],
                         found.map(|f| f.into()),
                         span,
@@ -207,7 +207,7 @@ where
             }
         }
 
-        Ok(M::bind(|| seq.clone()))
+        Ok(D::Mode::bind(|| seq.clone()))
     }
 }
 
@@ -271,15 +271,15 @@ where
     }
 
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, I::Token> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, I::Token> {
         let before = inp.save();
         match inp.next_inner() {
             #[allow(suspicious_double_ref_op)] // Is this a clippy bug?
-            Some(tok) if self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
+            Some(tok) if self.seq.contains(tok.borrow()) => Ok(D::Mode::bind(|| tok)),
             found => {
                 let err_span = inp.span_since(before.cursor());
                 inp.rewind(before);
-                inp.add_alt(
+                inp.add_alt::<D,_,_>(
                     self.seq
                         .seq_iter()
                         .map(|e| DefaultExpected::Token(T::to_maybe_ref(e))),
@@ -354,15 +354,15 @@ where
     }
 
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, I::Token> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, I::Token> {
         let before = inp.save();
         match inp.next_inner() {
             // #[allow(suspicious_double_ref_op)] // Is this a clippy bug?
-            Some(tok) if !self.seq.contains(tok.borrow()) => Ok(M::bind(|| tok)),
+            Some(tok) if !self.seq.contains(tok.borrow()) => Ok(D::Mode::bind(|| tok)),
             found => {
                 let err_span = inp.span_since(before.cursor());
                 inp.rewind(before);
-                inp.add_alt(
+                inp.add_alt::<D,_,_>(
                     [DefaultExpected::SomethingElse],
                     found.map(|f| f.into()),
                     err_span,
@@ -437,12 +437,12 @@ where
     F: Fn(&mut InputRef<'src, '_, I, E>) -> Result<O, E::Error>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         let before = inp.cursor();
         match (self.f)(inp) {
-            Ok(out) => Ok(M::bind(|| out)),
+            Ok(out) => Ok(D::Mode::bind(|| out)),
             Err(err) => {
-                inp.add_alt_err(&before.inner, err);
+                inp.add_alt_err::<D>(&before.inner, err);
                 Err(())
             }
         }
@@ -496,7 +496,7 @@ where
     }
 
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         let before = inp.save();
         let next = inp.next_maybe_inner();
         let found = match next {
@@ -505,7 +505,7 @@ where
                     tok.borrow().clone(),
                     &mut MapExtra::new(before.cursor(), inp),
                 ) {
-                    Some(out) => return Ok(M::bind(|| out)),
+                    Some(out) => return Ok(D::Mode::bind(|| out)),
                     None => Some(tok.into()),
                 }
             }
@@ -513,7 +513,7 @@ where
         };
         let err_span = inp.span_since(before.cursor());
         inp.rewind(before);
-        inp.add_alt([DefaultExpected::SomethingElse], found, err_span);
+        inp.add_alt::<D,_,_>([DefaultExpected::SomethingElse], found, err_span);
         Err(())
     }
 
@@ -559,19 +559,19 @@ where
     F: Fn(&'src I::Token, &mut MapExtra<'src, '_, I, E>) -> Option<O>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         let before = inp.save();
         let next = inp.next_ref_inner();
         let found = match next {
             Some(tok) => match (self.filter)(tok, &mut MapExtra::new(before.cursor(), inp)) {
-                Some(out) => return Ok(M::bind(|| out)),
+                Some(out) => return Ok(D::Mode::bind(|| out)),
                 None => Some(tok.into()),
             },
             found => found.map(|f| f.into()),
         };
         let err_span = inp.span_since(before.cursor());
         inp.rewind(before);
-        inp.add_alt([DefaultExpected::SomethingElse], found, err_span);
+        inp.add_alt::<D,_,_>([DefaultExpected::SomethingElse], found, err_span);
         Err(())
     }
 
@@ -603,14 +603,14 @@ where
     }
 
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, I::Token> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, I::Token> {
         let before = inp.save();
         match inp.next_inner() {
-            Some(tok) => Ok(M::bind(|| tok)),
+            Some(tok) => Ok(D::Mode::bind(|| tok)),
             found => {
                 let err_span = inp.span_since(before.cursor());
                 inp.rewind(before);
-                inp.add_alt([DefaultExpected::Any], found.map(|f| f.into()), err_span);
+                inp.add_alt::<D,_,_>([DefaultExpected::Any], found.map(|f| f.into()), err_span);
                 Err(())
             }
         }
@@ -659,14 +659,14 @@ where
     E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, &'src I::Token> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, &'src I::Token> {
         let before = inp.save();
         match inp.next_ref_inner() {
-            Some(tok) => Ok(M::bind(|| tok)),
+            Some(tok) => Ok(D::Mode::bind(|| tok)),
             found => {
                 let err_span = inp.span_since(before.cursor());
                 inp.rewind(before);
-                inp.add_alt([DefaultExpected::Any], found.map(|f| f.into()), err_span);
+                inp.add_alt::<D,_,_>([DefaultExpected::Any], found.map(|f| f.into()), err_span);
                 Err(())
             }
         }
@@ -728,8 +728,8 @@ where
     EI::Context: 'src,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-        inp.with_ctx(&(self.mapper)(inp.ctx()), |inp| self.parser.go::<M>(inp))
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+        inp.with_ctx(&(self.mapper)(inp.ctx()), |inp| self.parser.go::<D>(inp))
     }
 
     go_extra!(O);
@@ -858,7 +858,7 @@ where
     E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, _inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+    fn go<D: Driver>(&self, _inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         todo!(
             "Attempted to use an unimplemented parser at {}",
             self.location
@@ -947,18 +947,18 @@ macro_rules! impl_choice_for_tuple {
             }
 
             #[inline]
-            fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+            fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
                 let before = inp.save();
 
                 let Choice { parsers: ($Head, $($X,)*), .. } = self;
 
-                match $Head.go::<M>(inp) {
+                match $Head.go::<D>(inp) {
                     Ok(out) => return Ok(out),
                     Err(()) => inp.rewind(before.clone()),
                 }
 
                 $(
-                    match $X.go::<M>(inp) {
+                    match $X.go::<D>(inp) {
                         Ok(out) => return Ok(out),
                         Err(()) => inp.rewind(before.clone()),
                     }
@@ -978,8 +978,8 @@ macro_rules! impl_choice_for_tuple {
             $Head:  Parser<'src, I, O, E>,
         {
             #[inline]
-            fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-                self.parsers.0.go::<M>(inp)
+            fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+                self.parsers.0.go::<D>(inp)
             }
 
             go_extra!(O);
@@ -996,17 +996,17 @@ where
     E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         if self.parsers.is_empty() {
             let offs = inp.cursor();
             let err_span = inp.span_since(&offs);
-            inp.add_alt([], None, err_span);
+            inp.add_alt::<D,_,_>([], None, err_span);
             Err(())
         } else {
             let before = inp.save();
             for parser in self.parsers.iter() {
                 inp.rewind(before.clone());
-                if let Ok(out) = parser.go::<M>(inp) {
+                if let Ok(out) = parser.go::<D>(inp) {
                     return Ok(out);
                 }
             }
@@ -1024,8 +1024,8 @@ where
     E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-        choice(&self.parsers[..]).go::<M>(inp)
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+        choice(&self.parsers[..]).go::<D>(inp)
     }
     go_extra!(O);
 }
@@ -1037,8 +1037,8 @@ where
     E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, O> {
-        choice(&self.parsers[..]).go::<M>(inp)
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+        choice(&self.parsers[..]).go::<D>(inp)
     }
     go_extra!(O);
 }
@@ -1064,18 +1064,18 @@ where
     P: Parser<'src, I, O, E>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, [O; N]> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, [O; N]> {
         let mut arr: [MaybeUninit<_>; N] = MaybeUninitExt::uninit_array();
         self.parsers
             .iter()
             .zip(arr.iter_mut())
             .try_for_each(|(p, res)| {
-                res.write(p.go::<M>(inp)?);
+                res.write(p.go::<D>(inp)?);
                 Ok(())
             })?;
         // SAFETY: We guarantee that all parers succeeded and as such all items have been initialized
         //         if we reach this point
-        Ok(M::array(unsafe { MaybeUninitExt::array_assume_init(arr) }))
+        Ok(D::Mode::array(unsafe { MaybeUninitExt::array_assume_init(arr) }))
     }
 
     go_extra!([O; N]);
@@ -1083,26 +1083,26 @@ where
 
 macro_rules! flatten_map {
     // map a single element into a 1-tuple
-    (<$M:ident> $head:ident) => {
-        $M::map(
+    (<$D:ident> $head:ident) => {
+        $D::Mode::map(
             $head,
             |$head| ($head,),
         )
     };
     // combine two elements into a 2-tuple
-    (<$M:ident> $head1:ident $head2:ident) => {
-        $M::combine(
+    (<$D:ident> $head1:ident $head2:ident) => {
+        $D::Mode::combine(
             $head1,
             $head2,
             |$head1, $head2| ($head1, $head2),
         )
     };
     // combine and flatten n-tuples from recursion
-    (<$M:ident> $head:ident $($X:ident)+) => {
-        $M::combine(
+    (<$D:ident> $head:ident $($X:ident)+) => {
+        $D::Mode::combine(
             $head,
             flatten_map!(
-                <$M>
+                <$D>
                 $($X)+
             ),
             |$head, ($($X),+)| ($head, $($X),+),
@@ -1125,14 +1125,14 @@ macro_rules! impl_group_for_tuple {
             $($X: Parser<'src, I, $O, E>),*
         {
             #[inline]
-            fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ($($O,)*)> {
+            fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, ($($O,)*)> {
                 let Group { parsers: ($($X,)*) } = self;
 
                 $(
-                    let $X = $X.go::<M>(inp)?;
+                    let $X = $X.go::<D>(inp)?;
                 )*
 
-                Ok(flatten_map!(<M> $($X)*))
+                Ok(flatten_map!(<D> $($X)*))
             }
 
             go_extra!(($($O,)*));
@@ -1214,19 +1214,19 @@ pub const fn set<T>(parsers: T) -> Set<T> {
     Set { parsers }
 }
 
-fn go_or_finish<'src, O, I, E, P, M>(
-    item: &mut Option<M::Output<O>>,
+fn go_or_finish<'src, O, I, E, P, D>(
+    item: &mut Option<<D::Mode as Mode>::Output<O>>,
     parser: &P,
     inp: &mut InputRef<'src, '_, I, E>,
-) -> PResult<M, ()>
+) -> PResult<D::Mode, ()>
 where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
     P: Parser<'src, I, O, E>,
-    M: Mode,
+    D: Driver,
 {
     if item.is_none() {
-        match parser.go::<M>(inp) {
+        match parser.go::<D>(inp) {
             Ok(out) => {
                 *item = Some(out);
             }
@@ -1235,23 +1235,23 @@ where
             }
         }
     }
-    Ok(M::bind(|| ()))
+    Ok(D::Mode::bind(|| ()))
 }
 
-fn go_or_rewind<'src, O, I, E, P, M>(
-    item: &mut Option<M::Output<O>>,
+fn go_or_rewind<'src, O, I, E, P, D>(
+    item: &mut Option<<D::Mode as Mode>::Output<O>>,
     parser: &P,
     inp: &mut InputRef<'src, '_, I, E>,
 ) where
     I: Input<'src>,
     E: ParserExtra<'src, I>,
     P: Parser<'src, I, O, E>,
-    M: Mode,
+    D: Driver,
 {
     if item.is_none() {
         let save_before = inp.save();
         let pos_before = inp.cursor();
-        match parser.go::<M>(inp) {
+        match parser.go::<D>(inp) {
             Ok(out) => {
                 if pos_before == inp.cursor() {
                     inp.rewind(save_before.clone());
@@ -1279,14 +1279,14 @@ macro_rules! impl_set_for_tuple {
             $($P: Parser<'src, I, $O, E>),*
         {
             #[inline]
-            fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, ($($O,)*)> {
+            fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, ($($O,)*)> {
                 let Set { parsers: ($($P,)*), .. } = self;
-                $( let mut $I: Option<M::Output<$O>> = None; )*
+                $( let mut $I: Option<<D::Mode as Mode>::Output<$O>> = None; )*
 
                 // first iterate until there are no progress
                 loop {
                     let start = inp.cursor();
-                    $( go_or_rewind::<_, _, _, _, M>(&mut $I, $P, inp); )*
+                    $( go_or_rewind::<_, _, _, _, D>(&mut $I, $P, inp); )*
                     // none matched during this loop
                     if start == inp.cursor() {
                         break;
@@ -1294,11 +1294,11 @@ macro_rules! impl_set_for_tuple {
                 }
 
                 // Then a final iteration that matches remaining empty parsers
-                $( go_or_finish::<_, _, _, _, M>(&mut $I, $P, inp)?; )*
+                $( go_or_finish::<_, _, _, _, D>(&mut $I, $P, inp)?; )*
 
                 // unwrap is ok since we matched all items in the set exactly once
                 $( let $I = $I.unwrap(); )*
-                Ok(flatten_map!(<M> $($I)*))
+                Ok(flatten_map!(<D> $($I)*))
             }
 
             go_extra!(($($O,)*));
@@ -1315,18 +1315,18 @@ where
     E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, Vec<O>> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, Vec<O>> {
         let mut tmp = self
             .parsers
             .iter()
             .map(|_| None)
-            .collect::<Vec<Option<M::Output<O>>>>();
+            .collect::<Vec<Option<<D::Mode as Mode>::Output<O>>>>();
 
         // first iterate until there are no progress
         loop {
             let start = inp.cursor();
             for (i, parser) in self.parsers.iter().enumerate() {
-                go_or_rewind::<_, _, _, _, M>(&mut tmp[i], parser, inp);
+                go_or_rewind::<_, _, _, _, D>(&mut tmp[i], parser, inp);
             }
             // none matched during this loop
             if start == inp.cursor() {
@@ -1336,13 +1336,13 @@ where
 
         // Then a final iteration that matches remaining empty parsers
         for (i, parser) in self.parsers.iter().enumerate() {
-            go_or_finish::<_, _, _, _, M>(&mut tmp[i], parser, inp)?;
+            go_or_finish::<_, _, _, _, D>(&mut tmp[i], parser, inp)?;
         }
 
         // unwrap is ok since we matched all items in the se
-        let mut result = M::bind(|| Vec::new());
+        let mut result = D::Mode::bind(|| Vec::new());
         tmp.into_iter()
-            .for_each(|x| M::combine_mut(&mut result, x.unwrap(), |result, x| result.push(x)));
+            .for_each(|x| D::Mode::combine_mut(&mut result, x.unwrap(), |result, x| result.push(x)));
         Ok(result)
     }
 
@@ -1358,7 +1358,7 @@ where
     O: Copy,
 {
     #[inline]
-    fn go<M: Mode>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<M, [O; N]> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, [O; N]> {
         // Replace this when MRSV > 1.80
         //let mut tmp: [Option<M::Output<O>>; N] = [ const { None }; N];
         let mut tmp: [Option<O>; N] = [None; N];
@@ -1369,7 +1369,7 @@ where
             for (i, parser) in self.parsers.iter().enumerate() {
                 // Replace this when MRSV > 1.80
                 //go_or_rewind::<_, _, _, _, M>(&mut tmp[i], parser, inp);
-                go_or_rewind::<_, _, _, _, Emit>(&mut tmp[i], parser, inp);
+                go_or_rewind::<_, _, _, _, DoEmit<D>>(&mut tmp[i], parser, inp);
             }
             // none matched during this loop
             if start == inp.cursor() {
@@ -1381,13 +1381,13 @@ where
         for (i, parser) in self.parsers.iter().enumerate() {
             // Replace this when MRSV > 1.80
             //go_or_finish::<_, _, _, _, M>(&mut tmp[i], parser, inp)?;
-            go_or_finish::<_, _, _, _, Emit>(&mut tmp[i], parser, inp)?;
+            go_or_finish::<_, _, _, _, DoEmit<D>>(&mut tmp[i], parser, inp)?;
         }
 
         // unwrap is ok since we matched all items in the se
         // Replace this when MRSV > 1.80
         //Ok(M::array( tmp.map(|x| x.unwrap()) ))
-        Ok(M::bind(|| tmp.map(|x| x.unwrap())))
+        Ok(D::Mode::bind(|| tmp.map(|x| x.unwrap())))
     }
 
     go_extra!([O; N]);
