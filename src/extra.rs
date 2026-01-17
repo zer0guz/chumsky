@@ -48,7 +48,7 @@ pub type Err<E> = Full<E, DefaultState, DefaultCtx>;
 /// Use specified state type, but default other types. See [`ParserExtra`] for more details.
 ///
 /// Use `State<S>` or `Full<E, S, C>` as the `Extra` type parameter of a parser to use a custom state type.
-/// You can then use `parser().parse_with_state(&mut S)` to parse with a custom state.
+/// You can then use `parser().parse_with_state(&mut S,strict)` to parse with a custom state.
 ///
 /// See [`Parser::map_with`] for examples.
 pub type State<S> = Full<DefaultErr, S, DefaultCtx>;

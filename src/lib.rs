@@ -85,6 +85,7 @@ pub mod prelude {
     #[cfg(feature = "regex")]
     pub use super::regex::regex;
     pub use super::{
+        Boxed, ConfigIterParser, ConfigParser, IterParser, ParseResult, Parser,
         error::{Cheap, EmptyErr, Error as _, Rich, Simple},
         extra,
         input::Input,
@@ -93,9 +94,9 @@ pub mod prelude {
             todo,
         },
         recovery::{nested_delimiters, skip_then_retry_until, skip_until, via_parser},
-        recursive::{recursive, Recursive},
+        recursive::{Recursive, recursive},
         span::{SimpleSpan, Span as _, SpanWrap as _, Spanned},
-        text, Boxed, ConfigIterParser, ConfigParser, IterParser, ParseResult, Parser,
+        text,
     };
     pub use crate::{select, select_ref};
 }
@@ -124,7 +125,7 @@ use core::{
 };
 use hashbrown::HashMap;
 #[cfg(feature = "serde")]
-use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Visitor};
 
 use self::{
     combinator::*,
@@ -382,6 +383,15 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     {
         self.parse_with_state(input, &mut E::State::default())
     }
+    /// TODO
+    fn parse_strict(&self, input: I) -> ParseResult<O, E::Error>
+    where
+        I: Input<'src>,
+        E::State: Default,
+        E::Context: Default,
+    {
+        self.parse_with_state_strict(input, &mut E::State::default())
+    }
 
     /// Parse a stream of tokens, yielding an output if possible, and any errors encountered along the way.
     /// The provided state will be passed on to parsers that expect it, such as [`map_with`](Parser::map_with).
@@ -398,7 +408,36 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     {
         let mut own = InputOwn::new_state(input, state);
         let mut inp = own.as_ref_start();
+
+        let res = self.then_ignore(end()).go::<EmitRecover>(&mut inp);
+
+        let alt = inp.take_alt().map(|alt| alt.err).unwrap_or_else(|| {
+            let fake_span = inp.span_since(&inp.cursor());
+            // TODO: Why is this needed?
+            E::Error::expected_found([], None, fake_span)
+        });
+        let mut errs = own.into_errs();
+        let out = match res {
+            Ok(out) => Some(out),
+            Err(()) => {
+                errs.push(alt);
+                None
+            }
+        };
+        ParseResult::new(out, errs)
+    }
+
+    /// TODO Docs
+    fn parse_with_state_strict(&self, input: I, state: &mut E::State) -> ParseResult<O, E::Error>
+    where
+        I: Input<'src>,
+        E::Context: Default,
+    {
+        let mut own = InputOwn::new_state(input, state);
+        let mut inp = own.as_ref_start();
+
         let res = self.then_ignore(end()).go::<EmitStrict>(&mut inp);
+
         let alt = inp.take_alt().map(|alt| alt.err).unwrap_or_else(|| {
             let fake_span = inp.span_since(&inp.cursor());
             // TODO: Why is this needed?
@@ -2474,6 +2513,24 @@ where
     ) -> PResult<Check, O> {
         self.go_cfg::<CheckRecover>(inp, cfg)
     }
+    #[doc(hidden)]
+    #[inline(always)]
+    fn go_emit_cfg_strict(
+        &self,
+        inp: &mut InputRef<'src, '_, I, E>,
+        cfg: Self::Config,
+    ) -> PResult<Emit, O> {
+        self.go_cfg::<EmitStrict>(inp, cfg)
+    }
+    #[doc(hidden)]
+    #[inline(always)]
+    fn go_check_cfg_strict(
+        &self,
+        inp: &mut InputRef<'src, '_, I, E>,
+        cfg: Self::Config,
+    ) -> PResult<Check, O> {
+        self.go_cfg::<CheckStrict>(inp, cfg)
+    }
 
     /// A combinator that allows configuration of the parser from the current context. Context
     /// is most often derived from [`Parser::ignore_with_ctx`], [`Parser::then_with_ctx`] or [`map_ctx`],
@@ -2598,6 +2655,7 @@ where
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
     ) -> PResult<Emit, Self::IterState<D>>;
+
     #[doc(hidden)]
     fn next<D: Driver>(
         &self,
@@ -3206,8 +3264,8 @@ mod tests {
         type FileId = u32;
         type Span = SimpleSpan<usize, FileId>;
 
-        fn parser<'src>(
-        ) -> impl Parser<'src, WithContext<Span, &'src str>, [(Span, Token<'src>); 6]> {
+        fn parser<'src>()
+        -> impl Parser<'src, WithContext<Span, &'src str>, [(Span, Token<'src>); 6]> {
             let ident = any()
                 .filter(|c: &char| c.is_alphanumeric())
                 .repeated()
@@ -3590,7 +3648,7 @@ mod tests {
                 .to(())
                 .repeated()
                 .foldr_with(empty(), |_, _, _| ())
-                .parse_with_state("a+b+c", &mut ());
+                .parse("a+b+c");
         }
 
         #[test]
@@ -3954,7 +4012,7 @@ mod tests {
     #[test]
     #[allow(dead_code)]
     fn map_err_missed_info() {
-        use crate::{extra::Err, LabelError};
+        use crate::{LabelError, extra::Err};
 
         fn erroneous_map_err<'src>() -> impl Parser<'src, &'src str, (), Err<Rich<'src, char>>> {
             group((

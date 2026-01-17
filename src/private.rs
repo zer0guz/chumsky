@@ -179,8 +179,6 @@ impl Mode for Emit {
         E: ParserExtra<'a, I>,
         P: Parser<'a, I, O, E> + ?Sized,
     {
-        panic!();
-
         parser.go_emit(inp)
     }
     fn invoke_strict<'a, I, O, E, P>(
@@ -303,7 +301,6 @@ impl Mode for Check {
         E: ParserExtra<'a, I>,
         P: Parser<'a, I, O, E> + ?Sized,
     {
-        panic!();
         parser.go_check(inp)
     }
 
@@ -402,15 +399,15 @@ impl<T> MaybeUninitExt<T> for MaybeUninit<T> {
     }
 
     unsafe fn array_assume_init<const N: usize>(uninit: [Self; N]) -> [T; N] {
-        (&uninit as *const [Self; N] as *const [T; N]).read()
+        unsafe { (&uninit as *const [Self; N] as *const [T; N]).read() }
     }
 }
 
 pub trait Policy {
     const STRICT: bool;
 }
-pub type DoEmit<D: Driver> = D::WithMode<Emit>;
-pub type DoCheck<D: Driver> = D::WithMode<Check>;
+pub type DoEmit<D> = <D as Driver>::WithMode<Emit>;
+pub type DoCheck<D> = <D as Driver>::WithMode<Check>;
 pub trait Driver {
     type Mode: Mode;
     type Policy: Policy;

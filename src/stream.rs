@@ -91,7 +91,8 @@ where
         this: &mut Self::Cache,
         cursor: &mut Self::Cursor,
     ) -> Option<Self::MaybeToken> {
-        Self::next(this, cursor)
+        unsafe { Self::next(this, cursor) }
+
     }
 
     #[inline(always)]
@@ -209,7 +210,7 @@ where
 {
     #[inline]
     unsafe fn next(this: &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
-        Self::next_maybe(this, cursor)
+        unsafe { Self::next_maybe(this, cursor) }
     }
 }
 

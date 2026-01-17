@@ -7,12 +7,12 @@ repository = "https://github.com/zesterer/chumsky"
 license = "MIT"
 keywords = ["parser", "combinator", "token", "language", "syntax"]
 categories = ["parsing", "text-processing"]
-edition = "2021"
+edition = "2024"
 exclude = [
     "/misc/*",
     "/benches/samples/*",
 ]
-rust-version = "1.65"
+rust-version = "1.85"
 
 [features]
 default = ["std", "stacker"]
@@ -125,6 +125,11 @@ harness = false
 
 [[bench]]
 name = "cbor"
+harness = false
+
+
+[[bench]]
+name = "cbor_strict"
 harness = false
 
 [[example]]

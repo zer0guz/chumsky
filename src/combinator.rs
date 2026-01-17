@@ -171,9 +171,16 @@ where
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
     ) -> PResult<Emit, Self::IterState<D>> {
-        let span = inp.span_since(&inp.cursor());
-        let cfg = (self.cfg)(A::Config::default(), inp.ctx(), span)
-            .map_err(|e| inp.add_alt_err::<D>(&inp.cursor().inner, e))?;
+        let cur = inp.cursor();
+        let span = inp.span_since(&cur);
+
+        let cfg = match (self.cfg)(A::Config::default(), inp.ctx(), span) {
+            Ok(cfg) => cfg,
+            Err(e) => {
+                inp.add_alt_err_with::<D>(&cur.inner, || e);
+                return Err(());
+            }
+        };
 
         Ok((A::make_iter(&self.parser, inp)?, cfg))
     }
@@ -304,6 +311,17 @@ where
 
     #[inline(always)]
     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+        if D::Policy::STRICT {
+            let res = self.parser.go::<DoEmit<D>>(inp);
+            return match res {
+                Ok(out) => match (self.filter_mapper)(out) {
+                    Some(mapped) => Ok(D::Mode::bind(|| mapped)),
+                    None => Err(()),
+                },
+                Err(()) => Err(()),
+            };
+        }
+
         let found = inp.peek_maybe();
         let before = inp.cursor();
         // Remove the pre-inner alt, to be reinserted later so we always preserve it
@@ -320,7 +338,7 @@ where
                     Some(mapped) => {
                         // If successful, reinsert the original alt and then apply the new alt on top of it, since both are valid
                         if let Some(new_alt) = new_alt {
-                            inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
+                            inp.add_alt_err_impl::<D>(&new_alt.pos, new_alt.err);
                         }
                         Ok(D::Mode::bind(|| mapped))
                     }
@@ -329,7 +347,7 @@ where
                         let expected = [DefaultExpected::SomethingElse];
                         // TODO: Use something more detailed than the next token as the found
                         let err = E::Error::expected_found(expected, found, span);
-                        inp.add_alt_err::<D>(&before.inner, err);
+                        inp.add_alt_err_impl::<D>(&before.inner, err);
                         Err(())
                     }
                 }
@@ -338,7 +356,7 @@ where
             Err(_) => {
                 // Can't fail!
                 let new_alt = new_alt.unwrap();
-                inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
+                inp.add_alt_err_impl::<D>(&new_alt.pos, new_alt.err);
                 Err(())
             }
         }
@@ -704,7 +722,7 @@ where
                             out = b_f_out;
                         }
                         Err(err) => {
-                            inp.add_alt_err::<D>(&before.inner, err);
+                            inp.add_alt_err_with::<D>(&before.inner, || err);
                             break Err(());
                         }
                     }
@@ -753,6 +771,14 @@ where
     #[inline(always)]
     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         let before = inp.cursor();
+        if D::Policy::STRICT {
+            let out = self.parser.go::<DoEmit<D>>(inp)?;
+            let span = inp.span_since(&before);
+            return match (self.mapper)(out, span) {
+                Ok(out) => Ok(D::Mode::bind(|| out)),
+                Err(_err) => Err(()),
+            };
+        }
         // Remove the pre-inner alt, to be reinserted later so we always preserve it
         let old_alt = inp.errors.alt.take();
 
@@ -768,14 +794,14 @@ where
                     Ok(out) => {
                         // If successful apply the new alt on top of the original alt, since both are valid
                         if let Some(new_alt) = new_alt {
-                            inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
+                            inp.add_alt_err_impl::<D>(&new_alt.pos, new_alt.err);
                         }
                         Ok(D::Mode::bind(|| out))
                     }
 
                     Err(err) => {
                         // If unsuccessful replace the new alt with the mapper error (since it overrides it)
-                        inp.add_alt_err::<D>(&before.inner, err);
+                        inp.add_alt_err_impl::<D>(&before.inner, err);
                         Err(())
                     }
                 }
@@ -784,7 +810,7 @@ where
             Err(_) => {
                 // Can't fail!
                 let new_alt = new_alt.unwrap();
-                inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
+                inp.add_alt_err_impl::<D>(&new_alt.pos, new_alt.err);
                 Err(())
             }
         }
@@ -822,6 +848,13 @@ where
     #[inline(always)]
     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         let before = inp.cursor();
+        if D::Policy::STRICT {
+            let out = self.parser.go::<DoEmit<D>>(inp)?;
+            return match (self.mapper)(out, &mut MapExtra::new(&before, inp)) {
+                Ok(out) => Ok(D::Mode::bind(|| out)),
+                Err(_err) => Err(()),
+            };
+        }
         // Remove the pre-inner alt, to be reinserted later so we always preserve it
         let old_alt = inp.errors.alt.take();
 
@@ -836,14 +869,14 @@ where
                     Ok(out) => {
                         // If successful apply the new alt on top of the original alt, since both are valid
                         if let Some(new_alt) = new_alt {
-                            inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
+                            inp.add_alt_err_impl::<D>(&new_alt.pos, new_alt.err);
                         }
                         Ok(D::Mode::bind(|| out))
                     }
 
                     Err(err) => {
                         // If unsuccessful replace the new alt with the mapper error (since it overrides it)
-                        inp.add_alt_err::<D>(&before.inner, err);
+                        inp.add_alt_err_impl::<D>(&before.inner, err);
                         Err(())
                     }
                 }
@@ -852,7 +885,7 @@ where
             Err(_) => {
                 // Can't fail!
                 let new_alt = new_alt.unwrap();
-                inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
+                inp.add_alt_err_impl::<D>(&new_alt.pos, new_alt.err);
                 Err(())
             }
         }
@@ -1367,6 +1400,7 @@ where
 
     #[inline(always)]
     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+        //TODO STRICT ERROR HANDLING
         let before = inp.save();
 
         let inp2 = self.parser_b.go::<DoEmit<D>>(inp)?;
@@ -1390,7 +1424,7 @@ where
         let new_alt = inp.errors.alt.take();
         inp.errors.alt = alt;
         if let Some(new_alt) = new_alt {
-            inp.add_alt_err::<D>(&before.cursor().inner, new_alt.err);
+            inp.add_alt_err_impl::<D>(&before.cursor().inner, new_alt.err);
         }
         for err in inp
             .errors
@@ -2410,8 +2444,8 @@ where
 
     #[inline(always)]
     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, C> {
-        let mut output = D::Mode::bind::<C, _>(|| C::default());
-        let mut iter_state = self.parser.make_iter::<D>(inp)?;
+        let mut output = D::Mode::bind(|| C::default());
+        let mut iter_state = self.parser.make_iter(inp)?;
         loop {
             match self
                 .parser
@@ -2597,7 +2631,15 @@ where
     #[inline(always)]
     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, ()> {
         let before = inp.save();
-
+        if D::Policy::STRICT {
+            let ok = self.parser.go::<DoCheck<D>>(inp).is_ok();
+            inp.rewind(before);
+            return if ok {
+                Err(())
+            } else {
+                Ok(D::Mode::bind(|| ()))
+            };
+        }
         let alt = inp.errors.alt.take();
 
         let result = self.parser.go::<DoCheck<D>>(inp);
@@ -2609,7 +2651,7 @@ where
         match result {
             Ok(()) => {
                 let found = inp.peek_maybe();
-                inp.add_alt::<D, _, _>([DefaultExpected::SomethingElse], found, result_span);
+                inp.add_alt_impl([DefaultExpected::SomethingElse], found, result_span);
                 Err(())
             }
             Err(()) => Ok(D::Mode::bind(|| ())),
@@ -3103,6 +3145,13 @@ where
     #[inline(always)]
     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         let before = inp.save();
+        if D::Policy::STRICT {
+            let res = self.parser.go::<D>(inp);
+            if res.is_ok() {
+                inp.rewind_input(before);
+            }
+            return res;
+        }
         let old_alt = inp.take_alt();
         let res = self.parser.go::<D>(inp);
         let new_alt = inp.take_alt();
@@ -3111,14 +3160,14 @@ where
         if res.is_ok() {
             if let Some(new_alt) = new_alt {
                 if I::cursor_location(&before.cursor().inner) >= I::cursor_location(&new_alt.pos) {
-                    inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
+                    inp.add_alt_err_impl::<D>(&new_alt.pos, new_alt.err);
                 }
             }
             inp.rewind_input(before);
         } else {
             // Can't fail!
             let new_alt = new_alt.unwrap();
-            inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
+            inp.add_alt_err_impl::<D>(&new_alt.pos, new_alt.err);
         }
 
         res
@@ -3215,6 +3264,9 @@ where
     where
         Self: Sized,
     {
+        if D::Policy::STRICT {
+            return self.parser.go::<D>(inp);
+        }
         let start = inp.cursor();
         let old_alt = inp.take_alt();
         let res = self.parser.go::<D>(inp);
@@ -3223,7 +3275,7 @@ where
         if res.is_ok() {
             inp.errors.alt = old_alt;
             if let Some(new_alt) = new_alt {
-                inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
+                inp.add_alt_err_impl::<D>(&new_alt.pos, new_alt.err);
             }
         } else {
             // Can't fail!
@@ -3232,7 +3284,7 @@ where
             new_alt.err = (self.mapper)(new_alt.err, span, inp.state());
 
             inp.errors.alt = old_alt;
-            inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
+            inp.add_alt_err_impl::<D>(&new_alt.pos, new_alt.err);
         }
 
         res
@@ -3280,11 +3332,15 @@ where
     {
         let before = inp.cursor();
         let out = self.parser.go::<DoEmit<D>>(inp)?;
+        if D::Policy::STRICT {
+            let out = (self.validator)(out, &mut MapExtra::new(&before, inp), &mut Emitter::new());
+            return Ok(D::Mode::bind(|| out));
+        }
 
         let mut emitter = Emitter::new();
         let out = (self.validator)(out, &mut MapExtra::new(&before, inp), &mut emitter);
         for err in emitter.errors() {
-            inp.emit_at::<D>(before.clone(), err);
+            inp.emit_at(before.clone(), err);
         }
         Ok(D::Mode::bind(|| out))
     }
@@ -3370,13 +3426,14 @@ where
         inp: &mut InputRef<'src, '_, I, E>,
         cfg: Self::Config,
     ) -> PResult<D::Mode, O> {
-        let before = inp.cursor();
         if cfg {
             self.inner.go::<D>(inp)
         } else {
-            let err_span = inp.span_since(&before);
-            inp.add_alt::<D, _, _>([DefaultExpected::SomethingElse], None, err_span);
-            Err(())
+            inp.fail_with::<D, O, _, _>(|inp| {
+                let before = inp.cursor();
+                let span = inp.span_since(&before);
+                ([DefaultExpected::SomethingElse], None, span)
+            })
         }
     }
 }

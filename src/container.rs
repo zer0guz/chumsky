@@ -200,10 +200,10 @@ unsafe impl<T, const N: usize> ContainerExactly<T> for [T; N] {
         uninit[i].write(item);
     }
     unsafe fn drop_before(uninit: &mut Self::Uninit, i: usize) {
-        uninit[..i].iter_mut().for_each(|o| o.assume_init_drop());
+        uninit[..i].iter_mut().for_each(|o| unsafe { o.assume_init_drop() });
     }
     unsafe fn take(uninit: Self::Uninit) -> Self {
-        MaybeUninitExt::array_assume_init(uninit)
+        unsafe { MaybeUninitExt::array_assume_init(uninit) }
     }
 }
 
@@ -221,10 +221,10 @@ where
         C::write(&mut *uninit, i, item)
     }
     unsafe fn drop_before(uninit: &mut Self::Uninit, i: usize) {
-        C::drop_before(&mut *uninit, i)
+        unsafe { C::drop_before(&mut *uninit, i) }
     }
     unsafe fn take(uninit: Self::Uninit) -> Self {
-        Box::from_raw(Box::into_raw(uninit) as *mut C)
+        unsafe { Box::from_raw(Box::into_raw(uninit) as *mut C) }
     }
 }
 

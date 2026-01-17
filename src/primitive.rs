@@ -44,12 +44,9 @@ where
         let before = inp.save();
         match inp.next_maybe_inner() {
             None => Ok(D::Mode::bind(|| ())),
-            Some(tok) => {
-                let span = inp.span_since(before.cursor());
-                inp.rewind(before);
-                inp.add_alt::<D,_,_>([DefaultExpected::EndOfInput], Some(tok.into()), span);
-                Err(())
-            }
+            Some(tok) => inp.fail_rewind_with::<D, _, _, _>(before, |_inp, _span| {
+                ([DefaultExpected::EndOfInput], Some(tok.into()))
+            }),
         }
     }
 
@@ -195,14 +192,12 @@ where
             match inp.next_maybe_inner() {
                 Some(tok) if next.borrow() == tok.borrow() => {}
                 found => {
-                    let span = inp.span_since(before.cursor());
-                    inp.rewind(before);
-                    inp.add_alt::<D,_,_>(
-                        [DefaultExpected::Token(T::to_maybe_ref(next))],
-                        found.map(|f| f.into()),
-                        span,
-                    );
-                    return Err(());
+                    return inp.fail_rewind_with::<D, _, _, _>(before, |_inp, _span| {
+                        (
+                            [DefaultExpected::Token(T::to_maybe_ref(next))],
+                            found.map(|f| f.into()),
+                        )
+                    });
                 }
             }
         }
@@ -274,20 +269,11 @@ where
     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, I::Token> {
         let before = inp.save();
         match inp.next_inner() {
-            #[allow(suspicious_double_ref_op)] // Is this a clippy bug?
             Some(tok) if self.seq.contains(tok.borrow()) => Ok(D::Mode::bind(|| tok)),
-            found => {
-                let err_span = inp.span_since(before.cursor());
-                inp.rewind(before);
-                inp.add_alt::<D,_,_>(
-                    self.seq
-                        .seq_iter()
-                        .map(|e| DefaultExpected::Token(T::to_maybe_ref(e))),
-                    found.map(|f| f.into()),
-                    err_span,
-                );
-                Err(())
-            }
+            found => inp.fail_rewind_with::<D, _, _, _>(before, |_inp, _span| {
+                let found = found.map(|f| f.into());
+                ([DefaultExpected::Any], found)
+            }),
         }
     }
 
@@ -357,18 +343,11 @@ where
     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, I::Token> {
         let before = inp.save();
         match inp.next_inner() {
-            // #[allow(suspicious_double_ref_op)] // Is this a clippy bug?
             Some(tok) if !self.seq.contains(tok.borrow()) => Ok(D::Mode::bind(|| tok)),
-            found => {
-                let err_span = inp.span_since(before.cursor());
-                inp.rewind(before);
-                inp.add_alt::<D,_,_>(
-                    [DefaultExpected::SomethingElse],
-                    found.map(|f| f.into()),
-                    err_span,
-                );
-                Err(())
-            }
+            found => inp.fail_rewind_with::<D, _, _, _>(before, |_inp, _span| {
+                let found = found.map(|f| f.into());
+                ([DefaultExpected::SomethingElse], found)
+            }),
         }
     }
 
@@ -442,7 +421,7 @@ where
         match (self.f)(inp) {
             Ok(out) => Ok(D::Mode::bind(|| out)),
             Err(err) => {
-                inp.add_alt_err::<D>(&before.inner, err);
+                inp.add_alt_err_impl::<D>(&before.inner, err);
                 Err(())
             }
         }
@@ -499,22 +478,26 @@ where
     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         let before = inp.save();
         let next = inp.next_maybe_inner();
-        let found = match next {
+        match next {
             Some(tok) => {
-                match (self.filter)(
+                let mapped = (self.filter)(
                     tok.borrow().clone(),
                     &mut MapExtra::new(before.cursor(), inp),
-                ) {
-                    Some(out) => return Ok(D::Mode::bind(|| out)),
-                    None => Some(tok.into()),
+                );
+
+                if let Some(out) = mapped {
+                    return Ok(D::Mode::bind(|| out));
                 }
+
+                inp.fail_rewind_with::<D, _, _, _>(before, |_inp, _span| {
+                    ([DefaultExpected::SomethingElse], Some(tok.into()))
+                })
             }
-            found => found.map(|f| f.into()),
-        };
-        let err_span = inp.span_since(before.cursor());
-        inp.rewind(before);
-        inp.add_alt::<D,_,_>([DefaultExpected::SomethingElse], found, err_span);
-        Err(())
+
+            None => inp.fail_rewind_with::<D, _, _, _>(before, |_inp, _span| {
+                ([DefaultExpected::SomethingElse], None)
+            }),
+        }
     }
 
     go_extra!(O);
@@ -562,17 +545,23 @@ where
     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         let before = inp.save();
         let next = inp.next_ref_inner();
-        let found = match next {
-            Some(tok) => match (self.filter)(tok, &mut MapExtra::new(before.cursor(), inp)) {
-                Some(out) => return Ok(D::Mode::bind(|| out)),
-                None => Some(tok.into()),
-            },
-            found => found.map(|f| f.into()),
-        };
-        let err_span = inp.span_since(before.cursor());
-        inp.rewind(before);
-        inp.add_alt::<D,_,_>([DefaultExpected::SomethingElse], found, err_span);
-        Err(())
+        match next {
+            Some(tok) => {
+                let mapped = (self.filter)(tok, &mut MapExtra::new(before.cursor(), inp));
+
+                if let Some(out) = mapped {
+                    return Ok(D::Mode::bind(|| out));
+                }
+
+                inp.fail_rewind_with::<D, _, _, _>(before, |_inp, _span| {
+                    ([DefaultExpected::SomethingElse], Some(tok.into()))
+                })
+            }
+
+            None => inp.fail_rewind_with::<D, _, _, _>(before, |_inp, _span| {
+                ([DefaultExpected::SomethingElse], None)
+            }),
+        }
     }
 
     go_extra!(O);
@@ -607,12 +596,10 @@ where
         let before = inp.save();
         match inp.next_inner() {
             Some(tok) => Ok(D::Mode::bind(|| tok)),
-            found => {
-                let err_span = inp.span_since(before.cursor());
-                inp.rewind(before);
-                inp.add_alt::<D,_,_>([DefaultExpected::Any], found.map(|f| f.into()), err_span);
-                Err(())
-            }
+            found => inp.fail_rewind_with::<D, _, _, _>(before, |_inp, _span| {
+                let found = found.map(|f| f.into());
+                ([DefaultExpected::Any], found)
+            }),
         }
     }
 
@@ -659,16 +646,17 @@ where
     E: ParserExtra<'src, I>,
 {
     #[inline]
-    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, &'src I::Token> {
+    fn go<D: Driver>(
+        &self,
+        inp: &mut InputRef<'src, '_, I, E>,
+    ) -> PResult<D::Mode, &'src I::Token> {
         let before = inp.save();
         match inp.next_ref_inner() {
             Some(tok) => Ok(D::Mode::bind(|| tok)),
-            found => {
-                let err_span = inp.span_since(before.cursor());
-                inp.rewind(before);
-                inp.add_alt::<D,_,_>([DefaultExpected::Any], found.map(|f| f.into()), err_span);
-                Err(())
-            }
+            found => inp.fail_rewind_with::<D, _, _, _>(before, |_inp, _span| {
+                let found = found.map(|f| f.into());
+                ([DefaultExpected::Any], found)
+            }),
         }
     }
 
@@ -998,10 +986,11 @@ where
     #[inline]
     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
         if self.parsers.is_empty() {
-            let offs = inp.cursor();
-            let err_span = inp.span_since(&offs);
-            inp.add_alt::<D,_,_>([], None, err_span);
-            Err(())
+            return inp.fail_with::<D, O, _, _>(|inp| {
+                let offs = inp.cursor();
+                let span = inp.span_since(&offs);
+                ([], None, span)
+            });
         } else {
             let before = inp.save();
             for parser in self.parsers.iter() {
@@ -1075,7 +1064,9 @@ where
             })?;
         // SAFETY: We guarantee that all parers succeeded and as such all items have been initialized
         //         if we reach this point
-        Ok(D::Mode::array(unsafe { MaybeUninitExt::array_assume_init(arr) }))
+        Ok(D::Mode::array(unsafe {
+            MaybeUninitExt::array_assume_init(arr)
+        }))
     }
 
     go_extra!([O; N]);
@@ -1341,8 +1332,9 @@ where
 
         // unwrap is ok since we matched all items in the se
         let mut result = D::Mode::bind(|| Vec::new());
-        tmp.into_iter()
-            .for_each(|x| D::Mode::combine_mut(&mut result, x.unwrap(), |result, x| result.push(x)));
+        tmp.into_iter().for_each(|x| {
+            D::Mode::combine_mut(&mut result, x.unwrap(), |result, x| result.push(x))
+        });
         Ok(result)
     }
 

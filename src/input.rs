@@ -396,11 +396,11 @@ impl<'src> Input<'src> for &'src str {
         if *cursor < this.len() {
             // SAFETY: `cursor < self.len()` above guarantees cursor is in-bounds
             //         We only ever return cursors that are at a character boundary
-            let c = this
+            let c = unsafe { this
                 .get_unchecked(*cursor..)
                 .chars()
                 .next()
-                .unwrap_unchecked();
+                .unwrap_unchecked() };
             *cursor += c.len_utf8();
             Some(c)
         } else {
@@ -424,7 +424,7 @@ impl<'src> ExactSizeInput<'src> for &'src str {
 impl<'src> ValueInput<'src> for &'src str {
     #[inline(always)]
     unsafe fn next(this: &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
-        Self::next_maybe(this, cursor)
+        unsafe { Self::next_maybe(this, cursor) }
     }
 }
 
@@ -534,7 +534,7 @@ impl<'src, T> SliceInput<'src> for &'src [T] {
 impl<'src, T: Clone> ValueInput<'src> for &'src [T] {
     #[inline(always)]
     unsafe fn next(this: &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
-        Self::next_maybe(this, cursor).cloned()
+        unsafe { Self::next_maybe(this, cursor).cloned() }
     }
 }
 
@@ -544,7 +544,7 @@ impl<'src, T> BorrowInput<'src> for &'src [T] {
         this: &mut Self::Cache,
         cursor: &mut Self::Cursor,
     ) -> Option<&'src Self::Token> {
-        Self::next_maybe(this, cursor)
+        unsafe { Self::next_maybe(this, cursor) }
     }
 }
 
@@ -623,7 +623,7 @@ impl<'src, T: 'src, const N: usize> SliceInput<'src> for &'src [T; N] {
 impl<'src, T: Clone + 'src, const N: usize> ValueInput<'src> for &'src [T; N] {
     #[inline(always)]
     unsafe fn next(this: &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
-        Self::next_maybe(this, cursor).cloned()
+        unsafe { Self::next_maybe(this, cursor).cloned() }
     }
 }
 
@@ -633,7 +633,7 @@ impl<'src, T: 'src, const N: usize> BorrowInput<'src> for &'src [T; N] {
         this: &mut Self::Cache,
         cursor: &mut Self::Cursor,
     ) -> Option<&'src Self::Token> {
-        Self::next_maybe(this, cursor)
+        unsafe { Self::next_maybe(this, cursor) }
     }
 }
 
@@ -694,11 +694,11 @@ where
         (cache, mapper, _): &mut Self::Cache,
         cursor: &mut Self::Cursor,
     ) -> Option<Self::MaybeToken> {
-        I::next_maybe(cache, &mut cursor.0).map(|tok| {
+        unsafe { I::next_maybe(cache, &mut cursor.0).map(|tok| {
             let (tok, span) = mapper(tok);
             cursor.1 = Some(span.borrow().end());
             tok
-        })
+        }) }
     }
 
     #[inline]
@@ -706,7 +706,7 @@ where
         (cache, mapper, eoi): &mut Self::Cache,
         range: Range<&Self::Cursor>,
     ) -> Self::Span {
-        match I::next_maybe(cache, &mut range.start.0.clone()) {
+        match unsafe { I::next_maybe(cache, &mut range.start.0.clone()) } {
             Some(tok) => {
                 let start = mapper(tok).1.borrow().start();
                 let end = range.end.1.clone().unwrap_or_else(|| eoi.end());
@@ -734,9 +734,9 @@ where
         (cache, mapper, eoi): &mut Self::Cache,
         range: RangeFrom<&Self::Cursor>,
     ) -> Self::Span {
-        let start = I::next_maybe(cache, &mut range.start.0.clone())
+        let start = unsafe { I::next_maybe(cache, &mut range.start.0.clone())
             .map(|tok| mapper(tok).1.borrow().start())
-            .unwrap_or_else(|| eoi.end());
+            .unwrap_or_else(|| eoi.end()) };
         S::new(eoi.context(), start..eoi.end())
     }
 }
@@ -758,11 +758,11 @@ where
         (cache, mapper, _): &mut Self::Cache,
         cursor: &mut Self::Cursor,
     ) -> Option<Self::Token> {
-        I::next_maybe(cache, &mut cursor.0).map(|tok| {
+        unsafe { I::next_maybe(cache, &mut cursor.0).map(|tok| {
             let (tok, span) = mapper(tok);
             cursor.1 = Some(span.borrow().end());
             tok.borrow().clone()
-        })
+        }) }
     }
 }
 
@@ -785,11 +785,11 @@ where
         (cache, mapper, _): &mut Self::Cache,
         cursor: &mut Self::Cursor,
     ) -> Option<&'src Self::Token> {
-        I::next_ref(cache, &mut cursor.0).map(|tok| {
+        unsafe { I::next_ref(cache, &mut cursor.0).map(|tok| {
             let (tok, span) = mapper(tok.into());
             cursor.1 = Some(span.borrow().end());
             tok.into()
-        })
+        }) }
     }
 }
 
@@ -814,7 +814,7 @@ where
 
     #[inline(always)]
     unsafe fn slice((cache, _, _): &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Slice {
-        I::slice(cache, &range.start.0..&range.end.0)
+        unsafe { I::slice(cache, &range.start.0..&range.end.0) }
     }
 
     #[inline(always)]
@@ -822,7 +822,7 @@ where
         (cache, _, _): &mut Self::Cache,
         from: RangeFrom<&Self::Cursor>,
     ) -> Self::Slice {
-        I::slice_from(cache, &from.start.0..)
+        unsafe { I::slice_from(cache, &from.start.0..) }
     }
 }
 
@@ -866,12 +866,12 @@ where
         (cache, _): &mut Self::Cache,
         cursor: &mut Self::Cursor,
     ) -> Option<Self::MaybeToken> {
-        I::next_maybe(cache, cursor)
+        unsafe { I::next_maybe(cache, cursor) }
     }
 
     #[inline]
     unsafe fn span((cache, mapper): &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Span {
-        let inner_span = I::span(cache, range);
+        let inner_span = unsafe { I::span(cache, range) };
         (mapper)(inner_span)
     }
 }
@@ -889,7 +889,7 @@ where
         (cache, mapper): &mut Self::Cache,
         range: RangeFrom<&Self::Cursor>,
     ) -> Self::Span {
-        let inner_span = I::span_from(cache, range);
+        let inner_span = unsafe { I::span_from(cache, range) };
         (mapper)(inner_span)
     }
 }
@@ -902,9 +902,9 @@ where
     F: Fn(I::Span) -> S,
 {
     #[inline(always)]
-    unsafe fn next((cache, _): &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
+    unsafe fn next((cache, _): &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> { unsafe {
         I::next(cache, cursor)
-    }
+    }}
 }
 
 impl<'src, S, I: BorrowInput<'src>, F: 'src> BorrowInput<'src> for MappedSpan<S, I, F>
@@ -919,7 +919,7 @@ where
         (cache, _): &mut Self::Cache,
         cursor: &mut Self::Cursor,
     ) -> Option<&'src Self::Token> {
-        I::next_ref(cache, cursor)
+        unsafe { I::next_ref(cache, cursor) }
     }
 }
 
@@ -939,7 +939,7 @@ where
 
     #[inline(always)]
     unsafe fn slice((cache, _): &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Slice {
-        I::slice(cache, range)
+        unsafe { I::slice(cache, range) }
     }
 
     #[inline(always)]
@@ -947,7 +947,7 @@ where
         (cache, _): &mut Self::Cache,
         from: RangeFrom<&Self::Cursor>,
     ) -> Self::Slice {
-        I::slice_from(cache, from)
+        unsafe { I::slice_from(cache, from) }
     }
 }
 
@@ -1015,12 +1015,12 @@ where
         (cache, _): &mut Self::Cache,
         cursor: &mut Self::Cursor,
     ) -> Option<Self::MaybeToken> {
-        I::next_maybe(cache, cursor)
+        unsafe { I::next_maybe(cache, cursor) }
     }
 
     #[inline]
     unsafe fn span((cache, ctx): &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Span {
-        let inner_span = I::span(cache, range);
+        let inner_span = unsafe { I::span(cache, range) };
         S::new(
             ctx.clone(),
             inner_span.start().into()..inner_span.end().into(),
@@ -1040,7 +1040,7 @@ where
         (cache, ctx): &mut Self::Cache,
         range: RangeFrom<&Self::Cursor>,
     ) -> Self::Span {
-        let inner_span = I::span_from(cache, range);
+        let inner_span = unsafe { I::span_from(cache, range) };
         S::new(
             ctx.clone(),
             inner_span.start().into()..inner_span.end().into(),
@@ -1056,7 +1056,7 @@ where
 {
     #[inline(always)]
     unsafe fn next((cache, _): &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
-        I::next(cache, cursor)
+        unsafe { I::next(cache, cursor) }
     }
 }
 
@@ -1071,7 +1071,7 @@ where
         (cache, _): &mut Self::Cache,
         cursor: &mut Self::Cursor,
     ) -> Option<&'src Self::Token> {
-        I::next_ref(cache, cursor)
+        unsafe { I::next_ref(cache, cursor) }
     }
 }
 
@@ -1090,7 +1090,7 @@ where
 
     #[inline(always)]
     unsafe fn slice((cache, _): &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Slice {
-        I::slice(cache, range)
+        unsafe { I::slice(cache, range) }
     }
 
     #[inline(always)]
@@ -1098,7 +1098,7 @@ where
         (cache, _): &mut Self::Cache,
         from: RangeFrom<&Self::Cursor>,
     ) -> Self::Slice {
-        I::slice_from(cache, from)
+        unsafe { I::slice_from(cache, from) }
     }
 }
 
@@ -1162,7 +1162,7 @@ impl<'src, R: Read + Seek + 'src> Input<'src> for IoInput<R> {
         this: &mut Self::Cache,
         cursor: &mut Self::Cursor,
     ) -> Option<Self::MaybeToken> {
-        Self::next(this, cursor)
+        unsafe { Self::next(this, cursor) }
     }
 
     #[inline]
@@ -1794,19 +1794,13 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
     /// Emits a non-fatal error at the current position. This is equivalent to
     /// `emit_at(self.cursor(), error)`.
     #[inline]
-    pub fn emit<D: Driver>(&mut self, error: E::Error) {
-        if D::Policy::STRICT {
-            return;
-        }
+    pub fn emit(&mut self, error: E::Error) {
         self.emit_inner(None, error);
     }
 
     /// Emits a non-fatal error at the given cursor position.
     #[inline]
-    pub fn emit_at<D: Driver>(&mut self, cursor: Cursor<'src, 'parse, I>, error: E::Error) {
-        if D::Policy::STRICT {
-            return;
-        }
+    pub fn emit_at(&mut self, cursor: Cursor<'src, 'parse, I>, error: E::Error) {
         self.emit_inner(Some(cursor), error);
     }
 
@@ -1818,9 +1812,69 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
             .unwrap_or_else(|| self.cursor.clone());
         self.errors.secondary.push(Located::at(cursor, error));
     }
+    #[inline]
+    pub(crate) fn fail_with<D: Driver, O, Exp, L>(
+        &mut self,
+        mk: impl FnOnce(&mut Self) -> (Exp, Option<MaybeRef<'src, I::Token>>, I::Span),
+    ) -> PResult<D::Mode, O>
+    where
+        Exp: IntoIterator<Item = L>,
+        E::Error: LabelError<'src, I, L>,
+    {
+        if D::Policy::STRICT {
+            return Err(());
+        }
+        let (expected, found, span) = mk(self);
+        self.add_alt_impl(expected, found, span);
+        Err(())
+    }
 
     #[inline]
-    pub(crate) fn add_alt<D: Driver, Exp, L>(
+    pub(crate) fn fail_rewind_with<D: Driver, Exp, L, O>(
+        &mut self,
+        checkpoint: input::Checkpoint<
+            'src,
+            'parse,
+            I,
+            <E::State as Inspector<'src, I>>::Checkpoint,
+        >,
+        mk: impl FnOnce(&mut Self, &I::Span) -> (Exp, Option<MaybeRef<'src, I::Token>>),
+    ) -> PResult<D::Mode, O>
+    where
+        Exp: IntoIterator<Item = L>,
+        E::Error: LabelError<'src, I, L>,
+    {
+        if D::Policy::STRICT {
+            self.rewind(checkpoint);
+            return Err(());
+        }
+
+        let span = self.span_since(checkpoint.cursor());
+
+        let (expected, found) = mk(self, &span);
+
+        self.rewind(checkpoint);
+
+        self.add_alt_impl(expected, found, span);
+
+        Err(())
+    }
+    #[inline]
+    pub(crate) fn add_alt_with<D: Driver, Exp, L>(
+        &mut self,
+        mk: impl FnOnce(&mut Self) -> (Exp, Option<MaybeRef<'src, I::Token>>, I::Span),
+    ) where
+        Exp: IntoIterator<Item = L>,
+        E::Error: LabelError<'src, I, L>,
+    {
+        if D::Policy::STRICT {
+            return;
+        }
+        let (expected, found, span) = mk(self);
+        self.add_alt_impl(expected, found, span);
+    }
+    #[inline]
+    pub(crate) fn add_alt_impl<Exp, L>(
         &mut self,
         expected: Exp,
         found: Option<MaybeRef<'src, I::Token>>,
@@ -1829,9 +1883,6 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
         Exp: IntoIterator<Item = L>,
         E::Error: LabelError<'src, I, L>,
     {
-        if D::Policy::STRICT {
-            return;
-        }
         // Fast path: if the error doesn't carry meaningful information, avoid unnecessary decision-making!
         if core::mem::size_of::<E::Error>() == 0 {
             self.errors.alt = Some(Located::at(
@@ -1861,9 +1912,21 @@ impl<'src, 'parse, I: Input<'src>, E: ParserExtra<'src, I>> InputRef<'src, 'pars
             ),
         });
     }
+    #[inline]
+    pub(crate) fn add_alt_err_with<D: Driver>(
+        &mut self,
+        at: &I::Cursor,
+        mk: impl FnOnce() -> E::Error,
+    ) {
+        if D::Policy::STRICT {
+            return;
+        }
+        let err = mk();
+        self.add_alt_err_impl::<D>(at, err); // rename your existing body similarly
+    }
 
     #[inline]
-    pub(crate) fn add_alt_err<D: Driver>(&mut self, at: &I::Cursor, err: E::Error) {
+    pub(crate) fn add_alt_err_impl<D: Driver>(&mut self, at: &I::Cursor, err: E::Error) {
         if D::Policy::STRICT {
             return;
         }

@@ -220,6 +220,9 @@ where
 
     #[inline]
     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+        if D::Policy::STRICT {
+            return self.parser.go::<D>(inp);
+        }
         let old_alt = inp.errors.alt.take();
         let before = inp.save();
         let res = self.parser.go::<D>(inp);
@@ -238,7 +241,7 @@ where
                 let span = unsafe { I::span(inp.cache, &before.cursor().inner..&new_alt.pos) };
                 new_alt.err.in_context((self.label)(), span);
             }
-            inp.add_alt_err::<D>(&new_alt.pos, new_alt.err);
+            inp.add_alt_err_impl::<D>(&new_alt.pos, new_alt.err);
         }
 
         if self.is_context {

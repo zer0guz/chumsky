@@ -881,12 +881,12 @@ pub mod unicode {
                 //         And the Unicode standard guarantees that any sequence of code
                 //         points is a valid sequence of grapheme clusters, so the
                 //         behaviour of the `next()` function should not change.
-                let c = this
+                let c = unsafe { this
                     .as_str()
                     .get_unchecked(*cursor..)
                     .graphemes(true)
                     .next()
-                    .unwrap_unchecked();
+                    .unwrap_unchecked() };
                 *cursor += c.len();
                 Some(Grapheme::new(c))
             } else {
@@ -910,7 +910,7 @@ pub mod unicode {
     impl<'src> ValueInput<'src> for &'src Graphemes {
         #[inline(always)]
         unsafe fn next(this: &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
-            Self::next_maybe(this, cursor)
+            unsafe { Self::next_maybe(this, cursor) }
         }
     }
 
