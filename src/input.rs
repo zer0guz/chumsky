@@ -796,6 +796,7 @@ where
         (cache, mapper, _): &mut CacheOf<'src, Self>,
         cursor: &mut CursorOf<'src, Self>,
     ) -> Option<MaybeTokenOf<'src, Self>> {
+
         unsafe {
             I::next_maybe(cache, &mut cursor.0).map(|tok| {
                 let (tok, span) = mapper(tok);
@@ -839,6 +840,7 @@ where
         (cache, mapper, eoi): &mut CacheOf<'src, Self>,
         range: RangeFrom<&CursorOf<'src, Self>>,
     ) -> SpanOf<'src, Self> {
+
         let start = unsafe {
             I::next_maybe(cache, &mut range.start.0.clone())
                 .map(|tok| mapper(tok).1.borrow().start())
@@ -868,6 +870,7 @@ where
         (cache, mapper, _): &mut CacheOf<'src, Self>,
         cursor: &mut CursorOf<'src, Self>,
     ) -> Option<TokenOf<'src, Self>> {
+
         unsafe {
             I::next_maybe(cache, &mut cursor.0).map(|tok| {
                 let (tok, span) = mapper(tok);
@@ -898,6 +901,7 @@ where
         (cache, mapper, _): &mut CacheOf<'src, Self>,
         cursor: &mut CursorOf<'src, Self>,
     ) -> Option<&'src TokenOf<'src, Self>> {
+
         unsafe {
             I::next_ref(cache, &mut cursor.0).map(|tok| {
                 let (tok, span) = mapper(tok.into());
@@ -1054,6 +1058,7 @@ where
         (cache, _): &mut CacheOf<'src, Self>,
         cursor: &mut CursorOf<'src, Self>,
     ) -> Option<TokenOf<'src, Self>> {
+
         unsafe { I::next(cache, cursor) }
     }
 }
@@ -1569,7 +1574,7 @@ pub struct InputRef<'src, 'parse, I: Input, E: ParserExtra<'src, I>> {
     pub(crate) state: &'parse mut E::State,
     pub(crate) ctx: &'parse E::Context,
     #[cfg(feature = "memoization")]
-    pub(crate) memos: &'parse mut HashMap<(usize, usize), Option<Located<I::Cursor, E::Error>>>,
+    pub(crate) memos: &'parse mut HashMap<(usize, usize), Option<Located<CursorOf<'src,I>, E::Error>>>,
 }
 
 impl<'src, 'parse, I: Input, E: ParserExtra<'src, I>> InputRef<'src, 'parse, I, E>
@@ -1976,7 +1981,7 @@ where
     #[cfg(any(feature = "regex", feature = "lexical-numbers"))]
     pub(crate) unsafe fn skip_bytes(&mut self, skip: usize)
     where
-        I: SliceInput<'src, Cursor = usize>,
+        I: SliceInput<Cursor = usize>,
     {
         self.cursor += skip;
     }

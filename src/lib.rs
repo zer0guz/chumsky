@@ -139,6 +139,7 @@ use self::{
     input::{
         BorrowInput, Emitter, ExactSizeInput, InputRef, MapExtra, SliceInput, StrInput, ValueInput,
     },
+    inspector::*,
     label::{LabelError, Labelled, LabelledWith},
     prelude::*,
     primitive::Any,
@@ -2658,13 +2659,15 @@ where
         let iter_state = match &mut self.iter_state {
             Some(state) => state,
             None => {
-                let state = parser.make_iter::<EmitRecover>(&mut inp).ok()?;
+
+                let state = parser.make_iter(&mut inp).ok()?;
                 self.iter_state = Some(state);
                 self.iter_state.as_mut().unwrap()
             }
         };
 
-        let res = parser.next::<EmitRecover>(&mut inp, iter_state, IterParserDebug::new(true));
+
+        let res = parser.next(&mut inp, iter_state, IterParserDebug::new(true));
         // TODO: Avoid clone
         self.own.start = inp.cursor().inner;
         res.ok().and_then(|res| res)

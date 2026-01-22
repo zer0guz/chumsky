@@ -114,7 +114,7 @@ mod current {
     /// ```
     ///
     /// Now, users can import your trait and do `a.frobnicate_with(b)` as if your parser were native to chumsky!
-    pub trait ExtParser<'src, I: Input, O, E: ParserExtra<'src, I>> {
+    pub trait ExtParser<'src, I: Input + 'src, O, E: ParserExtra<'src, I>> {
         /// Attempt parsing on the given input.
         ///
         /// See [`InputRef`] for more information about how you can work with parser inputs.
@@ -153,17 +153,17 @@ mod current {
 
     impl<'src, I, O, E, P> Parser<'src, I, O, E> for Ext<P>
     where
-        I: Input,
+        I: Input + 'src,
         E: ParserExtra<'src, I>,
         P: ExtParser<'src, I, O, E>,
     {
         #[inline(always)]
         fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
             let before = inp.cursor();
-            match M::choose(&mut *inp, |inp| self.0.parse(inp), |inp| self.0.check(inp)) {
+            match D::Mode::choose(&mut *inp, |inp| self.0.parse(inp), |inp| self.0.check(inp)) {
                 Ok(out) => Ok(out),
                 Err(err) => {
-                    inp.add_alt_err(&before.inner, err);
+                    inp.add_alt_err_impl::<D>(&before.inner, err);
                     Err(())
                 }
             }

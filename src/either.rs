@@ -30,8 +30,8 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        prelude::{any, just},
         IterParser, Parser,
+        prelude::{any, just},
     };
     use either::Either;
 

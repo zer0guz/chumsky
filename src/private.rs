@@ -89,7 +89,7 @@ pub trait Mode {
     fn invoke_pratt_op_prefix<'src, 'parse, Op, I, O, E>(
         op: &Op,
         inp: &mut InputRef<'src, 'parse, I, E>,
-        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self, O>,
     ) -> pratt::OperatorResult<Self::Output<O>, ()>
     where
@@ -101,7 +101,7 @@ pub trait Mode {
         op: &Op,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: Self::Output<O>,
         min_power: i32,
     ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
@@ -114,7 +114,7 @@ pub trait Mode {
         op: &Op,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: Self::Output<O>,
         min_power: i32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self, O>,
@@ -212,7 +212,7 @@ impl Mode for Emit {
     fn invoke_pratt_op_prefix<'src, 'parse, Op, I, O, E>(
         op: &Op,
         inp: &mut InputRef<'src, 'parse, I, E>,
-        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self, O>,
     ) -> pratt::OperatorResult<Self::Output<O>, ()>
     where
@@ -228,7 +228,7 @@ impl Mode for Emit {
         op: &Op,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: Self::Output<O>,
         min_power: i32,
     ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
@@ -245,7 +245,7 @@ impl Mode for Emit {
         op: &Op,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: Self::Output<O>,
         min_power: i32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self, O>,
@@ -335,7 +335,7 @@ impl Mode for Check {
     fn invoke_pratt_op_prefix<'src, 'parse, Op, I, O, E>(
         op: &Op,
         inp: &mut InputRef<'src, 'parse, I, E>,
-        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self, O>,
     ) -> pratt::OperatorResult<Self::Output<O>, ()>
     where
@@ -351,7 +351,7 @@ impl Mode for Check {
         op: &Op,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: Self::Output<O>,
         min_power: i32,
     ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
@@ -368,7 +368,7 @@ impl Mode for Check {
         op: &Op,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: Self::Output<O>,
         min_power: i32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self, O>,
