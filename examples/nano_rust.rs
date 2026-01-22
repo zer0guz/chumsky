@@ -3,7 +3,7 @@
 //! Run it with the following command:
 //! cargo run --features="label" --example nano_rust -- examples/sample.nrs
 
-use ariadne::{sources, Color, Label, Report, ReportKind};
+use ariadne::{Color, Label, Report, ReportKind, sources};
 use chumsky::{input::ValueInput, prelude::*};
 use std::{collections::HashMap, env, fmt, fs};
 
@@ -46,8 +46,8 @@ impl fmt::Display for Token<'_> {
     }
 }
 
-fn lexer<'src>(
-) -> impl Parser<'src, &'src str, Vec<Spanned<Token<'src>>>, extra::Err<Rich<'src, char, Span>>> {
+fn lexer<'src>()
+-> impl Parser<'src, &'src str, Vec<Spanned<Token<'src>>>, extra::Err<Rich<'src, char, Span>>> {
     // A parser for numbers
     let num = text::int(10)
         .then(just('.').then(text::digits(10)).or_not())
@@ -178,10 +178,10 @@ struct Func<'src> {
     body: Spanned<Expr<'src>>,
 }
 
-fn expr_parser<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, Spanned<Expr<'src>>, extra::Err<Rich<'tokens, Token<'src>, Span>>> + Clone
+fn expr_parser<'src, I>()
+-> impl Parser<'src, I, Spanned<Expr<'src>>, extra::Err<Rich<'src, Token<'src>, Span>>> + Clone
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ValueInput<Token = Token<'src>, Span = Span> + 'src,
 {
     recursive(|expr| {
         let inline_expr = recursive(|inline_expr| {
@@ -386,14 +386,11 @@ where
     })
 }
 
-fn funcs_parser<'tokens, 'src: 'tokens, I>() -> impl Parser<
-    'tokens,
-    I,
-    HashMap<&'src str, Func<'src>>,
-    extra::Err<Rich<'tokens, Token<'src>, Span>>,
-> + Clone
+fn funcs_parser<'src, I>()
+-> impl Parser<'src, I, HashMap<&'src str, Func<'src>>, extra::Err<Rich<'src, Token<'src>, Span>>>
++ Clone
 where
-    I: ValueInput<'tokens, Token = Token<'src>, Span = Span>,
+    I: ValueInput<Token = Token<'src>, Span = Span> + 'src,
 {
     let ident = select! { Token::Ident(ident) => ident };
 
@@ -512,7 +509,11 @@ fn eval_expr<'src>(
                     let mut stack = if f.args.len() != args.0.len() {
                         return Err(Error {
                             span: expr.1,
-                            msg: format!("'{}' called with wrong number of arguments (expected {name}, found {})", f.args.len(), args.0.len()),
+                            msg: format!(
+                                "'{}' called with wrong number of arguments (expected {name}, found {})",
+                                f.args.len(),
+                                args.0.len()
+                            ),
                         });
                     } else {
                         f.args
@@ -527,7 +528,7 @@ fn eval_expr<'src>(
                     return Err(Error {
                         span: func.1,
                         msg: format!("'{f:?}' is not callable"),
-                    })
+                    });
                 }
             }
         }
@@ -540,7 +541,7 @@ fn eval_expr<'src>(
                     return Err(Error {
                         span: cond.1,
                         msg: format!("Conditions must be booleans, found '{c:?}'"),
-                    })
+                    });
                 }
             }
         }

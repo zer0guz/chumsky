@@ -1,5 +1,7 @@
 //! TODO: Add documentation when approved
 
+use crate::input::SliceOf;
+
 use super::*;
 pub use lexical::format;
 
@@ -32,8 +34,8 @@ pub struct ExpectedNumber;
 impl<'src, const F: u128, I, O, E> Parser<'src, I, O, E> for Number<F, I, O, E>
 where
     O: FromLexical,
-    I: SliceInput<'src, Cursor = usize>,
-    <I as SliceInput<'src>>::Slice: AsRef<[u8]>,
+    I: SliceInput<Cursor = usize> + 'src,
+    SliceOf<'src,I>: AsRef<[u8]>,
     E: ParserExtra<'src, I>,
     E::Error: LabelError<'src, I, ExpectedNumber>,
 {

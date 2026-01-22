@@ -47,7 +47,7 @@ pub type Direct<'src, 'b, I, O, Extra> = DynParser<'src, 'b, I, O, Extra>;
 
 /// Type for recursive parsers that are defined through a call to [`Recursive::declare`], and as
 /// such require an additional layer of allocation.
-pub struct Indirect<'src, 'b, I: Input<'src>, O, Extra: ParserExtra<'src, I>> {
+pub struct Indirect<'src, 'b, I: Input, O, Extra: ParserExtra<'src, I>> {
     inner: OnceCell<Box<DynParser<'src, 'b, I, O, Extra>>>,
 }
 
@@ -59,7 +59,7 @@ pub struct Recursive<P: ?Sized> {
     inner: RecursiveInner<P>,
 }
 
-impl<'src, 'b, I: Input<'src>, O, E: ParserExtra<'src, I>> Recursive<Indirect<'src, 'b, I, O, E>> {
+impl<'src, 'b, I: Input, O, E: ParserExtra<'src, I>> Recursive<Indirect<'src, 'b, I, O, E>> {
     /// Declare the existence of a recursive parser, allowing it to be used to construct parser combinators before
     /// being fulled defined.
     ///
@@ -156,7 +156,7 @@ pub(crate) fn recurse<R, F: FnOnce() -> R>(f: F) -> R {
 
 impl<'src, I, O, E> Parser<'src, I, O, E> for Recursive<Indirect<'src, '_, I, O, E>>
 where
-    I: Input<'src>,
+    I: Input,
     E: ParserExtra<'src, I>,
 {
     #[doc(hidden)]
@@ -197,7 +197,7 @@ where
 
 impl<'src, I, O, E> Parser<'src, I, O, E> for Recursive<Direct<'src, '_, I, O, E>>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     #[doc(hidden)]
@@ -272,7 +272,7 @@ where
 // INFO: Clone bound not actually needed, but good to be safe for future compat
 pub fn recursive<'src, 'b, I, O, E, A, F>(f: F) -> Recursive<Direct<'src, 'b, I, O, E>>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E> + Clone + 'b,
     F: FnOnce(Recursive<Direct<'src, 'b, I, O, E>>) -> A,

@@ -31,7 +31,7 @@ use super::*;
 /// This trait is sealed and so cannot be implemented by other crates because it has an unstable API. This may
 /// eventually change. For now, if you wish to implement a new strategy, consider using [`via_parser`] or
 /// [opening an issue/PR](https://github.com/zesterer/chumsky/issues/new).
-pub trait Strategy<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Default>:
+pub trait Strategy<'src, I: Input + 'src, O, E: ParserExtra<'src, I> = extra::Default>:
     Sealed
 {
     // Attempt to recover from a parsing failure.
@@ -56,7 +56,7 @@ pub fn via_parser<A>(parser: A) -> ViaParser<A> {
 impl<A> Sealed for ViaParser<A> {}
 impl<'src, I, O, E, A> Strategy<'src, I, O, E> for ViaParser<A>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     A: Parser<'src, I, O, E>,
     E: ParserExtra<'src, I>,
 {
@@ -87,7 +87,7 @@ pub struct RecoverWith<A, S> {
 
 impl<'src, I, O, E, A, S> Parser<'src, I, O, E> for RecoverWith<A, S>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E>,
     S: Strategy<'src, I, O, E>,
@@ -134,7 +134,7 @@ pub struct SkipThenRetryUntil<S, U> {
 impl<S, U> Sealed for SkipThenRetryUntil<S, U> {}
 impl<'src, I, O, E, S, U> Strategy<'src, I, O, E> for SkipThenRetryUntil<S, U>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     S: Parser<'src, I, (), E>,
     U: Parser<'src, I, (), E>,
     E: ParserExtra<'src, I>,
@@ -193,7 +193,7 @@ pub struct SkipUntil<S, U, F> {
 impl<S, U, F> Sealed for SkipUntil<S, U, F> {}
 impl<'src, I, O, E, S, U, F> Strategy<'src, I, O, E> for SkipUntil<S, U, F>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     S: Parser<'src, I, (), E>,
     U: Parser<'src, I, (), E>,
     F: Fn() -> O,
@@ -242,17 +242,17 @@ pub fn skip_until<S, U, F>(skip: S, until: U, fallback: F) -> SkipUntil<S, U, F>
 /// A function that generates a fallback output on recovery is also required.
 // TODO: Make this a strategy, add an unclosed_delimiter error
 pub fn nested_delimiters<'src, 'parse, I, O, E, F, const N: usize>(
-    start: I::Token,
-    end: I::Token,
-    others: [(I::Token, I::Token); N],
+    start: TokenOf<'src,I>,
+    end: TokenOf<'src,I>,
+    others: [(TokenOf<'src,I>, TokenOf<'src,I>); N],
     fallback: F,
 ) -> impl Parser<'src, I, O, E> + Clone + 'parse
 where
-    I: ValueInput<'src>,
-    I::Token: PartialEq + Clone,
+    I: ValueInput,
+    TokenOf<'src,I>: PartialEq + Clone,
     E: extra::ParserExtra<'src, I> + 'parse,
     'src: 'parse,
-    F: Fn(I::Span) -> O + Clone + 'parse,
+    F: Fn(SpanOf<'src,I>) -> O + Clone + 'parse,
 {
     // TODO: Does this actually work? TESTS!
     #[allow(clippy::tuple_array_conversions)]

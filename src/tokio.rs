@@ -2,7 +2,7 @@ use super::*;
 
 use bytes::Bytes;
 
-impl<'src> Input<'src> for Bytes {
+impl<'src> Input for Bytes {
     type Cursor = usize;
     type Span = SimpleSpan<usize>;
 
@@ -40,7 +40,7 @@ impl<'src> Input<'src> for Bytes {
     }
 }
 
-impl<'src> ExactSizeInput<'src> for Bytes {
+impl<'src> ExactSizeInput for Bytes {
     #[inline(always)]
     unsafe fn span_from(this: &mut Self::Cache, range: RangeFrom<&Self::Cursor>) -> Self::Span {
         (*range.start..this.len()).into()
@@ -48,7 +48,7 @@ impl<'src> ExactSizeInput<'src> for Bytes {
 }
 
 impl Sealed for Bytes {}
-impl<'src> StrInput<'src> for Bytes {
+impl<'src> StrInput for Bytes {
     #[doc(hidden)]
     fn stringify(slice: Self::Slice) -> String {
         slice
@@ -59,7 +59,7 @@ impl<'src> StrInput<'src> for Bytes {
     }
 }
 
-impl<'src> SliceInput<'src> for Bytes {
+impl<'src> SliceInput for Bytes {
     type Slice = Bytes;
 
     #[inline(always)]
@@ -78,7 +78,7 @@ impl<'src> SliceInput<'src> for Bytes {
     }
 }
 
-impl<'src> ValueInput<'src> for Bytes {
+impl<'src> ValueInput for Bytes {
     #[inline(always)]
     unsafe fn next(this: &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
         Self::next_maybe(this, cursor)

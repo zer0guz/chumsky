@@ -1,9 +1,11 @@
 //! Items related to parser labelling.
 
+use crate::input::{SpanOf, TokenOf};
+
 use super::*;
 
 /// A trait implemented by [`Error`]s that can originate from labelled parsers. See [`Parser::labelled`].
-pub trait LabelError<'src, I: Input<'src>, L>: Sized {
+pub trait LabelError<'src, I: Input, L>: Sized {
     /// Create a new error describing a conflict between expected inputs and that which was actually found.
     ///
     /// `found` having the value `None` indicates that the end of input was reached, but was not expected.
@@ -11,8 +13,8 @@ pub trait LabelError<'src, I: Input<'src>, L>: Sized {
     /// An expected input having the value `None` indicates that the end of input was expected.
     fn expected_found<E: IntoIterator<Item = L>>(
         expected: E,
-        found: Option<MaybeRef<'src, I::Token>>,
-        span: I::Span,
+        found: Option<MaybeRef<'src, TokenOf<'src, I>>>,
+        span: SpanOf<'src, I>,
     ) -> Self;
 
     /// Fast path for `a.merge(LabelError::expected_found(...))` that may incur less overhead by, for example, reusing allocations.
@@ -20,8 +22,8 @@ pub trait LabelError<'src, I: Input<'src>, L>: Sized {
     fn merge_expected_found<E: IntoIterator<Item = L>>(
         self,
         expected: E,
-        found: Option<MaybeRef<'src, I::Token>>,
-        span: I::Span,
+        found: Option<MaybeRef<'src, TokenOf<'src, I>>>,
+        span: SpanOf<'src, I>,
     ) -> Self
     where
         Self: Error<'src, I>,
@@ -34,8 +36,8 @@ pub trait LabelError<'src, I: Input<'src>, L>: Sized {
     fn replace_expected_found<E: IntoIterator<Item = L>>(
         self,
         expected: E,
-        found: Option<MaybeRef<'src, I::Token>>,
-        span: I::Span,
+        found: Option<MaybeRef<'src, TokenOf<'src, I>>>,
+        span: SpanOf<'src, I>,
     ) -> Self {
         LabelError::expected_found(expected, found, span)
     }
@@ -53,7 +55,7 @@ pub trait LabelError<'src, I: Input<'src>, L>: Sized {
     /// A span that runs from the beginning of the context up until the error location is also provided.
     ///
     /// In practice, this usually means adding the context to a context 'stack', similar to a backtrace.
-    fn in_context(&mut self, label: L, span: I::Span) {
+    fn in_context(&mut self, label: L, span: SpanOf<'src, I>) {
         #![allow(unused_variables)]
     }
 }
@@ -86,7 +88,7 @@ impl<A, L> Labelled<A, L> {
 
 impl<'src, I, O, E, A, L> Parser<'src, I, O, E> for Labelled<A, L>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E>,
     L: Clone,
@@ -164,7 +166,7 @@ impl<A, L, F> LabelledWith<A, L, F> {
 
 impl<'src, I, O, E, A, L, F> Parser<'src, I, O, E> for LabelledWith<A, L, F>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E>,
     F: Fn() -> L,

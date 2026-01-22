@@ -88,7 +88,7 @@ fn parser<'src>() -> impl Parser<'src, &'src str, ()> {
 3. The first type parameter (i.e: ignoring the lifetime parameter) of the [`Parser`] trait is the input type. Inputs
    must implement the [`Input`] trait. Examples of inputs include strings, slices, arrays, [`Stream`]s, and much more.
    For now we specify that this parser can only operate upon string slices: but it is also possible to introduce the
-   input type as a generic type parameter like `I: Input<'src>` instead if you want your parser to be generic across
+   input type as a generic type parameter like `I: Input` instead if you want your parser to be generic across
    more than just string slices.
 
 4. The second type parameter of the [`Parser`] trait is the output type. This is the type of the value that your parser

@@ -1,3 +1,5 @@
+use crate::input::{CacheOf, CursorOf, InputFor, MaybeTokenOf};
+
 use super::*;
 
 /// An input that dynamically pulls tokens from a cached [`Iterator`].
@@ -63,10 +65,8 @@ pub type BoxedStream<'a, T> = Stream<Box<dyn Iterator<Item = T> + 'a>>;
 pub type BoxedExactSizeStream<'a, T> = Stream<Box<dyn ExactSizeIterator<Item = T> + 'a>>;
 
 impl<I: Iterator> Sealed for Stream<I> {}
-impl<'src, I: Iterator + 'src> Input<'src> for Stream<I>
-where
-    I::Item: Clone,
-{
+
+impl<'src, I: Iterator> InputFor<'src> for Stream<I> {
     type Span = SimpleSpan<usize>;
 
     type Token = I::Item;
@@ -75,48 +75,61 @@ where
     type Cursor = usize;
 
     type Cache = Self;
+}
 
+impl<I: Iterator> Input for Stream<I>
+where
+    I::Item: Clone,
+{
     #[inline(always)]
-    fn begin(self) -> (Self::Cursor, Self::Cache) {
+    fn begin<'src>(self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
         (0, self)
     }
 
     #[inline]
-    fn cursor_location(cursor: &Self::Cursor) -> usize {
+    fn cursor_location<'src>(cursor: &CursorOf<'src, Self>) -> usize {
         *cursor
     }
 
     #[inline(always)]
-    unsafe fn next_maybe(
-        this: &mut Self::Cache,
-        cursor: &mut Self::Cursor,
-    ) -> Option<Self::MaybeToken> {
+    unsafe fn next_maybe<'src>(
+        this: &mut CacheOf<'src, Self>,
+        cursor: &mut CursorOf<'src, Self>,
+    ) -> Option<MaybeTokenOf<'src, Self>> {
         unsafe { Self::next(this, cursor) }
-
     }
 
     #[inline(always)]
-    unsafe fn span(_this: &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Span {
+    unsafe fn span<'src>(
+        _this: &mut CacheOf<'src, Self>,
+        range: Range<&CursorOf<'src, Self>>,
+    ) -> SpanOf<'src, Self> {
         (*range.start..*range.end).into()
     }
 }
 
-impl<'src, I: ExactSizeIterator + 'src> ExactSizeInput<'src> for Stream<I>
+impl<I: ExactSizeIterator> ExactSizeInput for Stream<I>
 where
     I::Item: Clone,
 {
     #[inline(always)]
-    unsafe fn span_from(this: &mut Self::Cache, range: RangeFrom<&Self::Cursor>) -> Self::Span {
+    unsafe fn span_from<'src>(
+        this: &mut CacheOf<'src, Self>,
+        range: RangeFrom<&CursorOf<'src, Self>>,
+    ) -> SpanOf<'src, Self> {
         (*range.start..this.tokens.len() + this.iter.len()).into()
     }
 }
 
-impl<'src, I: Iterator + 'src> ValueInput<'src> for Stream<I>
+impl<I: Iterator> ValueInput for Stream<I>
 where
     I::Item: Clone,
 {
     #[inline]
-    unsafe fn next(this: &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
+    unsafe fn next<'src>(
+        this: &mut CacheOf<'src, Self>,
+        cursor: &mut CursorOf<'src, Self>,
+    ) -> Option<TokenOf<'src, Self>> {
         // Pull new items into the vector if we need them
         if this.tokens.len() <= *cursor {
             this.tokens.extend((&mut this.iter).take(512));
@@ -135,22 +148,22 @@ where
 /// This input type supports rewinding by [`Clone`]-ing the iterator. It is recommended that your iterator is very
 /// cheap to clone. If this is not the case, consider using [`Stream`] instead, which caches generated tokens
 /// internally.
-pub struct IterInput<I, S> {
+pub struct IterInput<I,S,T> {
     iter: I,
     eoi: S,
+    _t: EmptyPhantom<T>
 }
 
-impl<I, S> IterInput<I, S> {
+impl<I, S,T> IterInput<I, S,T> {
     /// Create a new [`IterInput`] with the given iterator, and end of input span.
     pub fn new(iter: I, eoi: S) -> Self {
-        Self { iter, eoi }
+        Self { iter, eoi, _t: EmptyPhantom::new() }
     }
 }
 
-impl<'src, I, T: 'src, S> Input<'src> for IterInput<I, S>
+impl<'src, I,S:Span,T> InputFor<'src> for IterInput<I,S,T>
 where
-    I: Iterator<Item = (T, S)> + Clone + 'src,
-    S: Span + 'src,
+    I: Iterator<Item = (T, S)> + Clone,
 {
     type Cursor = (I, usize, Option<S::Offset>);
     type Span = S;
@@ -159,21 +172,28 @@ where
     type MaybeToken = T;
 
     type Cache = S; // eoi
+}
 
+impl<I, T, S> Input for IterInput<I, S,T>
+where
+    S: Span,
+    I: Iterator<Item = (T, S)> + Clone,
+
+{
     #[inline]
-    fn begin(self) -> (Self::Cursor, Self::Cache) {
+    fn begin<'src>(self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
         ((self.iter, 0, None), self.eoi)
     }
 
     #[inline]
-    fn cursor_location(cursor: &Self::Cursor) -> usize {
+    fn cursor_location<'src>(cursor: &CursorOf<'src, Self>) -> usize {
         cursor.1
     }
 
-    unsafe fn next_maybe(
-        _eoi: &mut Self::Cache,
-        cursor: &mut Self::Cursor,
-    ) -> Option<Self::MaybeToken> {
+    unsafe fn next_maybe<'src>(
+        _eoi: &mut CacheOf<'src, Self>,
+        cursor: &mut CursorOf<'src, Self>,
+    ) -> Option<MaybeTokenOf<'src, Self>> {
         cursor.0.next().map(|(tok, span)| {
             cursor.1 += 1;
             cursor.2 = Some(span.end());
@@ -181,7 +201,10 @@ where
         })
     }
 
-    unsafe fn span(eoi: &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Span {
+    unsafe fn span<'src>(
+        eoi: &mut CacheOf<'src, Self>,
+        range: Range<&CursorOf<'src, Self>>,
+    ) -> SpanOf<'src, Self> {
         match range.start.0.clone().next() {
             Some((_, s)) => {
                 let end = range.end.2.clone().unwrap_or_else(|| eoi.end());
@@ -192,31 +215,34 @@ where
     }
 }
 
-// impl<'src, I, S> ExactSizeInput<'src> for IterInput<I, S>
+// impl<'src, I, S> ExactSizeInput for IterInput<I, S>
 // where
 //     I: Iterator<Item = (T, S)> + Clone + 'src,
 //     S: Span + 'src,
 // {
 //     #[inline(always)]
-//     unsafe fn span_from(this: &mut Self::Cache, range: RangeFrom<&Self::Cursor>) -> Self::Span {
+//     unsafe fn span_from(this: &mut CacheOf<'src,Self>, range: RangeFrom<&CursorOf<'src,Self>>) -> SpanOf<'src,Self> {
 //         (*range.start..this.tokens.len() + cursor.0.len()).into()
 //     }
 // }
 
-impl<'src, I, T: 'src, S> ValueInput<'src> for IterInput<I, S>
+impl<I, T, S> ValueInput for IterInput<I, S,T>
 where
-    I: Iterator<Item = (T, S)> + Clone + 'src,
-    S: Span + 'src,
+    I: Iterator<Item = (T, S)> + Clone,
+    S: Span,
 {
     #[inline]
-    unsafe fn next(this: &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
+    unsafe fn next<'src>(
+        this: &mut CacheOf<'src, Self>,
+        cursor: &mut CursorOf<'src, Self>,
+    ) -> Option<TokenOf<'src, Self>> {
         unsafe { Self::next_maybe(this, cursor) }
     }
 }
 
 #[test]
 fn map_tuple() {
-    fn parser<'src, I: Input<'src, Token = char>>() -> impl Parser<'src, I, char> {
+    fn parser<'src, I: Input<Token = char> + 'src>() -> impl Parser<'src, I, char> {
         just('h')
     }
 

@@ -10,8 +10,8 @@ enum Token {
 }
 
 #[allow(clippy::let_and_return)]
-fn parser<'src>(
-) -> impl Parser<'src, MappedInput<'src, Token, SimpleSpan, &'src [(Token, SimpleSpan)]>, i64> {
+fn parser<'src>()
+-> impl Parser<'src, MappedInput<'src, Token, SimpleSpan, &'src [(Token, SimpleSpan)]>, i64> {
     recursive(|expr| {
         let num = select_ref! { Token::Num(x) => *x };
         let parens = expr

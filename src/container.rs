@@ -200,7 +200,9 @@ unsafe impl<T, const N: usize> ContainerExactly<T> for [T; N] {
         uninit[i].write(item);
     }
     unsafe fn drop_before(uninit: &mut Self::Uninit, i: usize) {
-        uninit[..i].iter_mut().for_each(|o| unsafe { o.assume_init_drop() });
+        uninit[..i]
+            .iter_mut()
+            .for_each(|o| unsafe { o.assume_init_drop() });
     }
     unsafe fn take(uninit: Self::Uninit) -> Self {
         unsafe { MaybeUninitExt::array_assume_init(uninit) }
@@ -358,21 +360,13 @@ impl<'p, T: Clone> Seq<'p, T> for T {
     }
 }
 
-#[doc(hidden)]
-#[cfg(feature = "debug")]
-impl<'p, T: Clone + core::fmt::Debug> Seq<'p, T> for T {
-    default fn seq_info(&self, _scope: &mut debug::NodeScope) -> debug::SeqInfo {
-        debug::SeqInfo::Opaque(format!("{self:?}"))
-    }
-}
-
-#[doc(hidden)]
-#[cfg(feature = "debug")]
-impl Seq<'_, char> for char {
-    fn seq_info(&self, _scope: &mut debug::NodeScope) -> debug::SeqInfo {
-        debug::SeqInfo::Char(*self)
-    }
-}
+// #[doc(hidden)]
+// #[cfg(feature = "debug")]
+// impl Seq<'_, char> for char {
+//     fn seq_info(&self, _scope: &mut debug::NodeScope) -> debug::SeqInfo {
+//         debug::SeqInfo::Char(*self)
+//     }
+// }
 
 impl<'p, T> Seq<'p, T> for &'p T {
     type Item<'a>
@@ -403,7 +397,7 @@ impl<'p, T> Seq<'p, T> for &'p T {
     where
         'p: 'b,
     {
-        MaybeRef::Ref(item)
+        MaybeRef::Ref(item.into())
     }
 }
 
@@ -436,7 +430,7 @@ impl<'p, T> Seq<'p, T> for &'p [T] {
     where
         'p: 'b,
     {
-        MaybeRef::Ref(item)
+        MaybeRef::Ref(item.into())
     }
 }
 
@@ -503,7 +497,7 @@ impl<'p, T, const N: usize> Seq<'p, T> for &'p [T; N] {
     where
         'p: 'b,
     {
-        MaybeRef::Ref(item)
+        MaybeRef::Ref(item.into())
     }
 }
 
@@ -704,6 +698,7 @@ where
     fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, T>
     where
         'p: 'b,
+        T: 'b,
     {
         MaybeRef::Val(item)
     }
@@ -738,6 +733,7 @@ where
     fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, T>
     where
         'p: 'b,
+        T: 'b,
     {
         MaybeRef::Val(item)
     }
@@ -772,6 +768,7 @@ where
     fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, T>
     where
         'p: 'b,
+        T: 'b,
     {
         MaybeRef::Val(item)
     }

@@ -112,7 +112,7 @@ macro_rules! op_check_and_emit {
                 'src,
                 'parse,
                 I,
-                <E::State as Inspector<'src, I>>::Checkpoint,
+                <E::State as Inspector<I>>::Checkpoint,
             >,
             f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Check, O>,
         ) -> OperatorResult<<Check as Mode>::Output<O>, ()> {
@@ -126,7 +126,7 @@ macro_rules! op_check_and_emit {
                 'src,
                 'parse,
                 I,
-                <E::State as Inspector<'src, I>>::Checkpoint,
+                <E::State as Inspector<I>>::Checkpoint,
             >,
             f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Emit, O>,
         ) -> OperatorResult<<Emit as Mode>::Output<O>, ()> {
@@ -141,7 +141,7 @@ macro_rules! op_check_and_emit {
                 'src,
                 'parse,
                 I,
-                <E::State as Inspector<'src, I>>::Checkpoint,
+                <E::State as Inspector<I>>::Checkpoint,
             >,
             lhs: (),
             min_power: i32,
@@ -157,7 +157,7 @@ macro_rules! op_check_and_emit {
                 'src,
                 'parse,
                 I,
-                <E::State as Inspector<'src, I>>::Checkpoint,
+                <E::State as Inspector<I>>::Checkpoint,
             >,
             lhs: O,
             min_power: i32,
@@ -173,7 +173,7 @@ macro_rules! op_check_and_emit {
                 'src,
                 'parse,
                 I,
-                <E::State as Inspector<'src, I>>::Checkpoint,
+                <E::State as Inspector<I>>::Checkpoint,
             >,
             lhs: (),
             min_power: i32,
@@ -190,7 +190,7 @@ macro_rules! op_check_and_emit {
                 'src,
                 'parse,
                 I,
-                <E::State as Inspector<'src, I>>::Checkpoint,
+                <E::State as Inspector<I>>::Checkpoint,
             >,
             lhs: O,
             min_power: i32,
@@ -204,7 +204,7 @@ macro_rules! op_check_and_emit {
 /// A type implemented by pratt parser operators.
 pub trait Operator<'src, I, O, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     /// Box this operator, allowing it to be used via dynamic dispatch.
@@ -224,7 +224,7 @@ where
             'src,
             'parse,
             I,
-            <E::State as Inspector<'src, I>>::Checkpoint,
+            <E::State as Inspector<I>>::Checkpoint,
         >,
         _f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
     ) -> OperatorResult<M::Output<O>, ()>
@@ -240,7 +240,7 @@ where
         &self,
         _inp: &mut InputRef<'src, 'parse, I, E>,
         _pre_expr: &input::Cursor<'src, 'parse, I>,
-        _pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        _pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: M::Output<O>,
         _min_power: i32,
     ) -> OperatorResult<M::Output<O>, M::Output<O>>
@@ -256,7 +256,7 @@ where
         &self,
         _inp: &mut InputRef<'src, 'parse, I, E>,
         _pre_expr: &input::Cursor<'src, 'parse, I>,
-        _pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        _pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: M::Output<O>,
         _min_power: i32,
         _f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
@@ -271,14 +271,14 @@ where
     fn do_parse_prefix_check<'parse>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
-        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Check, O>,
     ) -> OperatorResult<<Check as Mode>::Output<O>, ()>;
     #[doc(hidden)]
     fn do_parse_prefix_emit<'parse>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
-        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Emit, O>,
     ) -> OperatorResult<<Emit as Mode>::Output<O>, ()>;
     #[doc(hidden)]
@@ -286,7 +286,7 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: (),
         min_power: i32,
     ) -> OperatorResult<(), ()>;
@@ -295,7 +295,7 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: O,
         min_power: i32,
     ) -> OperatorResult<O, O>;
@@ -304,7 +304,7 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: (),
         min_power: i32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Check, O>,
@@ -314,7 +314,7 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: O,
         min_power: i32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Emit, O>,
@@ -332,20 +332,20 @@ impl<I, O, E> Clone for Boxed<'_, '_, I, O, E> {
 
 impl<'src, I, O, E> Operator<'src, I, O, E> for Boxed<'src, '_, I, O, E>
 where
-    I: Input<'src>,
+    I: Input,
     E: ParserExtra<'src, I>,
 {
     #[inline(always)]
     fn do_parse_prefix<'parse, D: Driver>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
-        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
-    ) -> OperatorResult<M::Output<O>, ()>
+    ) -> OperatorResult<<D::Mode as Mode>::Output<O>, ()>
     where
         Self: Sized,
     {
-        M::invoke_pratt_op_prefix(self, inp, pre_expr, f)
+        D::Mode::invoke_pratt_op_prefix(self, inp, pre_expr, f)
     }
 
     #[inline(always)]
@@ -353,14 +353,14 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-        lhs: M::Output<O>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
+        lhs: <D::Mode as Mode>::Output<O>,
         min_power: i32,
-    ) -> OperatorResult<M::Output<O>, M::Output<O>>
+    ) -> OperatorResult<<D::Mode as Mode>::Output<O>, <D::Mode as Mode>::Output<O>>
     where
         Self: Sized,
     {
-        M::invoke_pratt_op_postfix(self, inp, pre_expr, pre_op, lhs, min_power)
+        D::Mode::invoke_pratt_op_postfix(self, inp, pre_expr, pre_op, lhs, min_power)
     }
 
     #[inline(always)]
@@ -368,22 +368,22 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-        lhs: M::Output<O>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
+        lhs: DriverOut<D,O>,
         min_power: i32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
-    ) -> OperatorResult<M::Output<O>, M::Output<O>>
+    ) -> OperatorResult<DriverOut<D,O>, DriverOut<D,O>>
     where
         Self: Sized,
     {
-        M::invoke_pratt_op_infix(self, inp, pre_expr, pre_op, lhs, min_power, f)
+        D::Mode::invoke_pratt_op_infix(self, inp, pre_expr, pre_op, lhs, min_power, f)
     }
 
     #[inline(always)]
     fn do_parse_prefix_check<'parse>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
-        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Check, O>,
     ) -> OperatorResult<<Check as Mode>::Output<O>, ()> {
         self.0.do_parse_prefix_check(inp, pre_expr, f)
@@ -392,7 +392,7 @@ where
     fn do_parse_prefix_emit<'parse>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
-        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Emit, O>,
     ) -> OperatorResult<<Emit as Mode>::Output<O>, ()> {
         self.0.do_parse_prefix_emit(inp, pre_expr, f)
@@ -402,7 +402,7 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: (),
         min_power: i32,
     ) -> OperatorResult<(), ()> {
@@ -414,7 +414,7 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: O,
         min_power: i32,
     ) -> OperatorResult<O, O> {
@@ -426,7 +426,7 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: (),
         min_power: i32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Check, O>,
@@ -439,7 +439,7 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: O,
         min_power: i32,
         f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Emit, O>,
@@ -558,7 +558,7 @@ where
 
 impl<'src, I, O, E, A, F, Op> Operator<'src, I, O, E> for Infix<'src, A, F, O, Op, I, E>
 where
-    I: Input<'src>,
+    I: Input,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, Op, E>,
     F: Fn(O, Op, O, &mut MapExtra<'src, '_, I, E>) -> O,
@@ -568,11 +568,11 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-        lhs: M::Output<O>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
+        lhs: DriverOut<D,O>,
         min_power: i32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
-    ) -> OperatorResult<M::Output<O>, M::Output<O>>
+    ) -> OperatorResult<DriverOut<D,O>, DriverOut<D,O>>
     where
         Self: Sized,
     {
@@ -670,7 +670,7 @@ where
 
 impl<'src, I, O, E, A, F, Op> Operator<'src, I, O, E> for Prefix<'src, A, F, O, Op, I, E>
 where
-    I: Input<'src>,
+    I: Input,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, Op, E>,
     F: Fn(Op, O, &mut MapExtra<'src, '_, I, E>) -> O,
@@ -679,7 +679,7 @@ where
     fn do_parse_prefix<'parse, D: Driver>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
-        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
     ) -> OperatorResult<M::Output<O>, ()>
     where
@@ -755,7 +755,7 @@ where
 
 impl<'src, I, O, E, A, F, Op> Operator<'src, I, O, E> for Postfix<'src, A, F, O, Op, I, E>
 where
-    I: Input<'src>,
+    I: Input,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, Op, E>,
     F: Fn(O, Op, &mut MapExtra<'src, '_, I, E>) -> O,
@@ -765,10 +765,10 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-        lhs: M::Output<O>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
+        lhs: DriverOut<D,O>,
         min_power: i32,
-    ) -> OperatorResult<M::Output<O>, M::Output<O>>
+    ) -> OperatorResult<DriverOut<D,O>,DriverOut<D,O>>
     where
         Self: Sized,
     {
@@ -807,7 +807,7 @@ macro_rules! impl_operator_for_tuple {
         #[allow(unused_variables, non_snake_case)]
         impl<'src, I, O, E, $($X),*> Operator<'src, I, O, E> for ($($X,)*)
             where
-                I: Input<'src>,
+                I: Input + 'src,
                 E: ParserExtra<'src, I>,
                 $($X: Operator<'src, I, O, E>),*
         {
@@ -815,7 +815,7 @@ macro_rules! impl_operator_for_tuple {
             fn do_parse_prefix<'parse, D: Driver>(
                 &self,
                 inp: &mut InputRef<'src, 'parse, I, E>,
-                pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+                pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
                 f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
             ) -> OperatorResult<M::Output<O>, ()>
             where
@@ -836,7 +836,7 @@ macro_rules! impl_operator_for_tuple {
                 &self,
                 inp: &mut InputRef<'src, 'parse, I, E>,
                 pre_expr: &input::Cursor<'src, 'parse, I>,
-                pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+                pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
                 mut lhs: M::Output<O>,
                 min_power: i32,
             ) -> OperatorResult<M::Output<O>, M::Output<O>>
@@ -858,7 +858,7 @@ macro_rules! impl_operator_for_tuple {
                 &self,
                 inp: &mut InputRef<'src, 'parse, I, E>,
                 pre_expr: &input::Cursor<'src, 'parse, I>,
-                pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+                pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
                 mut lhs: M::Output<O>,
                 min_power: i32,
                 f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
@@ -886,7 +886,7 @@ impl_operator_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S
 #[allow(unused_variables, non_snake_case)]
 impl<'src, I, O, E, Op> Operator<'src, I, O, E> for Vec<Op>
 where
-    I: Input<'src>,
+    I: Input,
     E: ParserExtra<'src, I>,
     Op: Operator<'src, I, O, E>,
 {
@@ -894,7 +894,7 @@ where
     fn do_parse_prefix<'parse, D: Driver>(
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
-        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
     ) -> OperatorResult<M::Output<O>, ()>
     where
@@ -914,7 +914,7 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         mut lhs: M::Output<O>,
         min_power: i32,
     ) -> OperatorResult<M::Output<O>, M::Output<O>>
@@ -935,7 +935,7 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         mut lhs: M::Output<O>,
         min_power: i32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
@@ -964,7 +964,7 @@ impl<'src, Atom, Ops> Pratt<Atom, Ops> {
         min_power: i32,
     ) -> PResult<D::Mode, O>
     where
-        I: Input<'src>,
+        I: Input,
         E: ParserExtra<'src, I>,
         Atom: Parser<'src, I, O, E>,
         Ops: Operator<'src, I, O, E>,
@@ -1033,7 +1033,7 @@ impl<'src, Atom, Ops> Pratt<Atom, Ops> {
 #[allow(unused_variables, non_snake_case)]
 impl<'src, I, O, E, Atom, Ops> Parser<'src, I, O, E> for Pratt<Atom, Ops>
 where
-    I: Input<'src>,
+    I: Input,
     E: ParserExtra<'src, I>,
     Atom: Parser<'src, I, O, E>,
     Ops: Operator<'src, I, O, E>,

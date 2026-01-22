@@ -7,11 +7,13 @@
 
 use inspector::Inspector;
 
+use crate::input::{SliceOf, SpanOf, TokenOf};
+
 use super::*;
 
 /// The type of a lazy parser.
 pub type Lazy<'src, A, I, E> =
-    ThenIgnore<A, Repeated<Any<I, E>, <I as Input<'src>>::Token, I, E>, (), E>;
+    ThenIgnore<A, Repeated<Any<I, E>, TokenOf<'src,I>, I, E>, (), E>;
 
 /// Alter the configuration of a struct using parse-time context
 #[derive(Copy, Clone)]
@@ -24,7 +26,7 @@ impl<'src, I, O, E, A, F> Parser<'src, I, O, E> for Configure<A, F>
 where
     A: ConfigParser<'src, I, O, E>,
     F: Fn(A::Config, &E::Context) -> A::Config,
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     #[inline(always)]
@@ -62,7 +64,7 @@ impl<'src, I, OA, E, A, F> Parser<'src, I, (), E> for IterConfigure<A, F, OA>
 where
     A: ConfigIterParser<'src, I, OA, E>,
     F: Fn(A::Config, &E::Context) -> A::Config,
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     #[inline(always)]
@@ -84,7 +86,7 @@ impl<'src, I, O, E, A, F> IterParser<'src, I, O, E> for IterConfigure<A, F, O>
 where
     A: ConfigIterParser<'src, I, O, E>,
     F: Fn(A::Config, &E::Context) -> A::Config,
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     type IterState<D: Driver>
@@ -136,8 +138,8 @@ impl<A: Clone, F: Clone, O> Clone for TryIterConfigure<A, F, O> {
 impl<'src, I, OA, E, A, F> Parser<'src, I, (), E> for TryIterConfigure<A, F, OA>
 where
     A: ConfigIterParser<'src, I, OA, E>,
-    F: Fn(A::Config, &E::Context, I::Span) -> Result<A::Config, E::Error>,
-    I: Input<'src>,
+    F: Fn(A::Config, &E::Context, SpanOf<'src,I>) -> Result<A::Config, E::Error>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     #[inline(always)]
@@ -158,8 +160,8 @@ where
 impl<'src, I, O, E, A, F> IterParser<'src, I, O, E> for TryIterConfigure<A, F, O>
 where
     A: ConfigIterParser<'src, I, O, E>,
-    F: Fn(A::Config, &E::Context, I::Span) -> Result<A::Config, E::Error>,
-    I: Input<'src>,
+    F: Fn(A::Config, &E::Context, SpanOf<'src,I>) -> Result<A::Config, E::Error>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     type IterState<D: Driver>
@@ -212,10 +214,10 @@ impl<A: Clone, O> Clone for ToSlice<A, O> {
     }
 }
 
-impl<'src, A, I, O, E> Parser<'src, I, I::Slice, E> for ToSlice<A, O>
+impl<'src, A, I, O, E> Parser<'src, I, SliceOf<'src,I>, E> for ToSlice<A, O>
 where
     A: Parser<'src, I, O, E>,
-    I: SliceInput<'src>,
+    I: SliceInput,
     E: ParserExtra<'src, I>,
 {
     #[doc(hidden)]
@@ -225,7 +227,7 @@ where
     }
 
     #[inline(always)]
-    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, I::Slice>
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, SliceOf<'src,I>>
     where
         Self: Sized,
     {
@@ -235,7 +237,7 @@ where
         Ok(D::Mode::bind(|| inp.slice_since(&before..)))
     }
 
-    go_extra!(I::Slice);
+    go_extra!(SliceOf<'src,I>);
 }
 
 /// See [`Parser::filter`].
@@ -256,7 +258,7 @@ impl<A: Clone, F: Clone> Clone for Filter<A, F> {
 
 impl<'src, A, I, O, E, F> Parser<'src, I, O, E> for Filter<A, F>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E>,
     F: Fn(&O) -> bool,
@@ -298,7 +300,7 @@ impl<A: Clone, OA, F: Clone> Clone for FilterMap<A, OA, F> {
 
 impl<'src, I, O, E, A, OA, F> Parser<'src, I, O, E> for FilterMap<A, OA, F>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
     F: Fn(OA) -> Option<O>,
@@ -386,7 +388,7 @@ impl<A: Clone, OA, F: Clone> Clone for Map<A, OA, F> {
 
 impl<'src, I, O, E, A, OA, F> Parser<'src, I, O, E> for Map<A, OA, F>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
     F: Fn(OA) -> O,
@@ -408,7 +410,7 @@ where
 
 impl<'src, I, O, E, A, OA, F> IterParser<'src, I, O, E> for Map<A, OA, F>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: IterParser<'src, I, OA, E>,
     F: Fn(OA) -> O,
@@ -462,7 +464,7 @@ impl<A: Clone, OA, F: Clone> Clone for MapWith<A, OA, F> {
 
 impl<'src, I, O, E, A, OA, F> Parser<'src, I, O, E> for MapWith<A, OA, F>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
     F: Fn(OA, &mut MapExtra<'src, '_, I, E>) -> O,
@@ -487,7 +489,7 @@ where
 
 impl<'src, I, O, E, A, OA, F> IterParser<'src, I, O, E> for MapWith<A, OA, F>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: IterParser<'src, I, OA, E>,
     F: Fn(OA, &mut MapExtra<'src, '_, I, E>) -> O,
@@ -548,7 +550,7 @@ impl<A: Clone, OA, F: Clone> Clone for MapGroup<A, OA, F> {
 #[cfg(feature = "nightly")]
 impl<'src, I, O, E, A, OA, F> Parser<'src, I, O, E> for MapGroup<A, OA, F>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
     F: Fn<OA, Output = O>,
@@ -566,7 +568,7 @@ where
 #[cfg(feature = "nightly")]
 impl<'src, I, O, E, A, OA, F> IterParser<'src, I, O, E> for MapGroup<A, OA, F>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: IterParser<'src, I, OA, E>,
     F: Fn<OA, Output = O>,
@@ -617,20 +619,20 @@ impl<A: Clone, OA> Clone for ToSpan<A, OA> {
     }
 }
 
-impl<'src, I, OA, E, A> Parser<'src, I, I::Span, E> for ToSpan<A, OA>
+impl<'src, I, OA, E, A> Parser<'src, I, SpanOf<'src,I>, E> for ToSpan<A, OA>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
 {
     #[inline(always)]
-    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, I::Span> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, SpanOf<'src,I>> {
         let before = inp.cursor();
         self.parser.go::<DoCheck<D>>(inp)?;
         Ok(D::Mode::bind(|| inp.span_since(&before)))
     }
 
-    go_extra!(I::Span);
+    go_extra!(SpanOf<'src,I>);
 }
 
 /// See [`Parser::spanned`].
@@ -650,19 +652,19 @@ impl<A: Clone, OA> Clone for Spanned<A, OA> {
     }
 }
 
-impl<'src, I, OA, E, A> Parser<'src, I, <I::Span as WrappingSpan<OA>>::Spanned, E>
+impl<'src, I, OA, E, A> Parser<'src, I, <SpanOf<'src,I> as WrappingSpan<OA>>::Spanned, E>
     for Spanned<A, OA>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
-    I::Span: WrappingSpan<OA>,
+    SpanOf<'src,I>: WrappingSpan<OA>,
 {
     #[inline(always)]
     fn go<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-    ) -> PResult<D::Mode, <I::Span as WrappingSpan<OA>>::Spanned> {
+    ) -> PResult<D::Mode, <SpanOf<'src,I> as WrappingSpan<OA>>::Spanned> {
         let before = inp.cursor();
         let out = self.parser.go::<D>(inp)?;
         Ok(D::Mode::map(out, |out| {
@@ -670,7 +672,7 @@ where
         }))
     }
 
-    go_extra!(<I::Span as WrappingSpan<OA>>::Spanned);
+    go_extra!(<SpanOf<'src,I> as WrappingSpan<OA>>::Spanned);
 }
 
 /// See [`Parser::try_foldl`].
@@ -696,7 +698,7 @@ impl<F: Clone, A: Clone, B: Clone, OB, E> Clone for TryFoldl<F, A, B, OB, E> {
 
 impl<'src, I, F, A, B, OA, OB, E> Parser<'src, I, OA, E> for TryFoldl<F, A, B, OB, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     A: Parser<'src, I, OA, E>,
     B: IterParser<'src, I, OB, E>,
     E: ParserExtra<'src, I>,
@@ -757,10 +759,10 @@ impl<A: Clone, OA, F: Clone> Clone for TryMap<A, OA, F> {
 
 impl<'src, I, O, E, A, OA, F> Parser<'src, I, O, E> for TryMap<A, OA, F>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
-    F: Fn(OA, I::Span) -> Result<O, E::Error>,
+    F: Fn(OA, SpanOf<'src,I>) -> Result<O, E::Error>,
 {
     #[doc(hidden)]
     #[cfg(feature = "debug")]
@@ -840,7 +842,7 @@ impl<A: Clone, OA, F: Clone> Clone for TryMapWith<A, OA, F> {
 
 impl<'src, I, O, E, A, OA, F> Parser<'src, I, O, E> for TryMapWith<A, OA, F>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
     F: Fn(OA, &mut MapExtra<'src, '_, I, E>) -> Result<O, E::Error>,
@@ -915,7 +917,7 @@ impl<A: Clone, OA, O: Clone> Clone for To<A, OA, O> {
 
 impl<'src, I, O, E, A, OA> Parser<'src, I, O, E> for To<A, OA, O>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
     O: Clone,
@@ -954,7 +956,7 @@ impl<A: Clone, O> Clone for IntoIter<A, O> {
 
 impl<'src, A, O, I, E> Parser<'src, I, (), E> for IntoIter<A, O>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E>,
     O: IntoIterator,
@@ -970,7 +972,7 @@ where
 
 impl<'src, A, O, I, E> IterParser<'src, I, O::Item, E> for IntoIter<A, O>
 where
-    I: Input<'src>,
+    I: Input+ 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E>,
     O: IntoIterator,
@@ -1018,7 +1020,7 @@ impl<A: Clone, OA> Clone for Ignored<A, OA> {
 
 impl<'src, I, E, A, OA> Parser<'src, I, (), E> for Ignored<A, OA>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
 {
@@ -1060,7 +1062,7 @@ impl<A: Clone, O> Clone for Unwrapped<A, O> {
 
 impl<'src, I, E, A, O, U> Parser<'src, I, O, E> for Unwrapped<A, Result<O, U>>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, Result<O, U>, E>,
     U: fmt::Debug,
@@ -1088,7 +1090,7 @@ where
 
 impl<'src, I, E, A, O> Parser<'src, I, O, E> for Unwrapped<A, Option<O>>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, Option<O>, E>,
 {
@@ -1122,7 +1124,7 @@ pub struct Memoized<A> {
 #[cfg(feature = "memoization")]
 impl<'src, I, E, A, O> Parser<'src, I, O, E> for Memoized<A>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     E::Error: Clone,
     A: Parser<'src, I, O, E>,
@@ -1189,7 +1191,7 @@ impl<A: Clone, B: Clone, OA, OB, E> Clone for Then<A, B, OA, OB, E> {
 
 impl<'src, I, E, A, B, OA, OB> Parser<'src, I, (OA, OB), E> for Then<A, B, OA, OB, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
     B: Parser<'src, I, OB, E>,
@@ -1215,7 +1217,7 @@ where
 
 impl<'src, I, E, A, B, O, U, V> IterParser<'src, I, O, E> for Then<A, B, U, V, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: IterParser<'src, I, O, E>,
     B: IterParser<'src, I, O, E>,
@@ -1274,7 +1276,7 @@ impl<A: Clone, B: Clone, OA, E> Clone for IgnoreThen<A, B, OA, E> {
 
 impl<'src, I, E, A, B, OA, OB> Parser<'src, I, OB, E> for IgnoreThen<A, B, OA, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
     B: Parser<'src, I, OB, E>,
@@ -1319,7 +1321,7 @@ impl<A: Clone, B: Clone, OB, E> Clone for ThenIgnore<A, B, OB, E> {
 
 impl<'src, I, E, A, B, OA, OB> Parser<'src, I, OA, E> for ThenIgnore<A, B, OB, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
     B: Parser<'src, I, OB, E>,
@@ -1364,7 +1366,7 @@ impl<A: Clone, B: Clone, J, O, E> Clone for NestedIn<A, B, J, O, E> {
 
 impl<'src, I, J, E, A, B, O> Parser<'src, I, O, E> for NestedIn<A, B, J, O, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     // These bounds looks silly, but they basically just ensure that the extra type of the inner parser is compatible with the extra of the outer parser
     E: ParserExtra<
@@ -1374,10 +1376,10 @@ where
         State = <E as ParserExtra<'src, I>>::State,
         Context = <E as ParserExtra<'src, I>>::Context,
     >,
-    <E as ParserExtra<'src, I>>::Error: Error<'src, J>,
-    <E as ParserExtra<'src, I>>::State: Inspector<'src, J>,
+    <E as ParserExtra<'src, I>>::Error: Error<'src,J>,
+    <E as ParserExtra<'src, I>>::State: Inspector<J>,
     B: Parser<'src, I, J, E>,
-    J: Input<'src>,
+    J: Input + 'src,
     A: Parser<
         'src,
         J,
@@ -1464,7 +1466,7 @@ impl<A: Clone, B: Clone, OA, I, E> Clone for IgnoreWithCtx<A, B, OA, I, E> {
 impl<'src, I, E, A, B, OA, OB> Parser<'src, I, OB, E>
     for IgnoreWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
     B: Parser<'src, I, OB, extra::Full<E::Error, E::State, OA>>,
@@ -1482,7 +1484,7 @@ where
 impl<'src, I, E, A, B, OA, OB> IterParser<'src, I, OB, E>
     for IgnoreWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
     B: IterParser<'src, I, OB, extra::Full<E::Error, E::State, OA>>,
@@ -1538,7 +1540,7 @@ impl<A: Clone, B: Clone, OA, I, E> Clone for ThenWithCtx<A, B, OA, I, E> {
 impl<'src, I, E, A, B, OA, OB> Parser<'src, I, (OA, OB), E>
     for ThenWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
     B: Parser<'src, I, OB, extra::Full<E::Error, E::State, OA>>,
@@ -1557,7 +1559,7 @@ where
 impl<'src, I, E, A, B, OA, OB> IterParser<'src, I, OB, E>
     for ThenWithCtx<A, B, OA, I, extra::Full<E::Error, E::State, OA>>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
     B: IterParser<'src, I, OB, extra::Full<E::Error, E::State, OA>>,
@@ -1609,7 +1611,7 @@ impl<A: Clone, Ctx: Clone> Clone for WithCtx<A, Ctx> {
 
 impl<'src, I, O, E, A, Ctx> Parser<'src, I, O, E> for WithCtx<A, Ctx>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, extra::Full<E::Error, E::State, Ctx>>,
     Ctx: 'src,
@@ -1640,10 +1642,10 @@ impl<A: Clone, Ctx: Clone> Clone for WithState<A, Ctx> {
 
 impl<'src, I, O, E, A, State> Parser<'src, I, O, E> for WithState<A, State>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, extra::Full<E::Error, State, E::Context>>,
-    State: 'src + Clone + Inspector<'src, I>,
+    State: 'src + Clone + Inspector<I>,
 {
     #[inline(always)]
     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
@@ -1676,7 +1678,7 @@ impl<A: Clone, B: Clone, C: Clone, OB, OC> Clone for DelimitedBy<A, B, C, OB, OC
 
 impl<'src, I, E, A, B, C, OA, OB, OC> Parser<'src, I, OA, E> for DelimitedBy<A, B, C, OB, OC>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
     B: Parser<'src, I, OB, E>,
@@ -1726,7 +1728,7 @@ impl<A: Clone, B: Clone, OB> Clone for PaddedBy<A, B, OB> {
 
 impl<'src, I, E, A, B, OA, OB> Parser<'src, I, OA, E> for PaddedBy<A, B, OB>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
     B: Parser<'src, I, OB, E>,
@@ -1750,7 +1752,7 @@ pub struct Or<A, B> {
 
 impl<'src, I, O, E, A, B> Parser<'src, I, O, E> for Or<A, B>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E>,
     B: Parser<'src, I, O, E>,
@@ -1826,7 +1828,7 @@ impl<A: Clone, OA, I, E> Clone for Repeated<A, OA, I, E> {
 impl<'src, A, OA, I, E> Repeated<A, OA, I, E>
 where
     A: Parser<'src, I, OA, E>,
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     /// Require that the pattern appear at least a minimum number of times.
@@ -1892,7 +1894,7 @@ where
 
 impl<'src, I, E, A, OA> Parser<'src, I, (), E> for Repeated<A, OA, I, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
 {
@@ -1946,7 +1948,7 @@ where
 
 impl<'src, A, O, I, E> IterParser<'src, I, O, E> for Repeated<A, O, I, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E>,
 {
@@ -2008,7 +2010,7 @@ where
 
 impl<'src, A, O, I, E> ConfigIterParser<'src, I, O, E> for Repeated<A, O, I, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E>,
 {
@@ -2091,7 +2093,7 @@ impl<'src, A, B, OA, OB, I, E> SeparatedBy<A, B, OA, OB, I, E>
 where
     A: Parser<'src, I, OA, E>,
     B: Parser<'src, I, OB, E>,
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     /// Require that the pattern appear at least a minimum number of times.
@@ -2226,7 +2228,7 @@ where
 
 impl<'src, I, E, A, B, OA, OB> IterParser<'src, I, OA, E> for SeparatedBy<A, B, OA, OB, I, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
     B: Parser<'src, I, OB, E>,
@@ -2328,7 +2330,7 @@ where
 
 impl<'src, I, E, A, B, OA, OB> Parser<'src, I, (), E> for SeparatedBy<A, B, OA, OB, I, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
     B: Parser<'src, I, OB, E>,
@@ -2380,7 +2382,7 @@ impl<A: Clone, O> Clone for Enumerate<A, O> {
 impl<'src, I, O, E, A> IterParser<'src, I, (usize, O), E> for Enumerate<A, O>
 where
     A: IterParser<'src, I, O, E>,
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     type IterState<D: Driver>
@@ -2431,7 +2433,7 @@ impl<A: Clone, O, C> Clone for Collect<A, O, C> {
 
 impl<'src, I, O, E, A, C> Parser<'src, I, C, E> for Collect<A, O, C>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: IterParser<'src, I, O, E>,
     C: Container<O>,
@@ -2486,7 +2488,7 @@ impl<A: Clone, O, C> Clone for CollectExactly<A, O, C> {
 
 impl<'src, I, O, E, A, C> Parser<'src, I, C, E> for CollectExactly<A, O, C>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: IterParser<'src, I, O, E>,
     C: ContainerExactly<O>,
@@ -2538,7 +2540,7 @@ pub struct OrNot<A> {
 
 impl<'src, I, O, E, A> Parser<'src, I, Option<O>, E> for OrNot<A>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E>,
 {
@@ -2565,7 +2567,7 @@ where
 
 impl<'src, A, O, I, E> IterParser<'src, I, O, E> for OrNot<A>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E>,
 {
@@ -2624,7 +2626,7 @@ impl<A: Clone, OA> Clone for Not<A, OA> {
 
 impl<'src, I, E, A, OA> Parser<'src, I, (), E> for Not<A, OA>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
 {
@@ -2684,12 +2686,12 @@ impl<A: Clone, O> Clone for Flatten<A, O> {
 #[cfg(feature = "nightly")]
 impl<'src, A, O, I, E> IterParser<'src, I, O::Item, E> for Flatten<A, O>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: IterParser<'src, I, O, E>,
     O: IntoIterator,
 {
-    type IterState<D: Driver> = (A::IterState<D>, Option<M::Output<O::IntoIter>>);
+    type IterState<D: Driver> = (A::IterState<D>, Option<<D::Mode as Mode>::Output<O::IntoIter>>);
 
     #[inline(always)]
     fn make_iter<D: Driver>(
@@ -2708,7 +2710,7 @@ where
     ) -> IPResult<D::Mode, O::Item> {
         if let Some(item) = iter
             .as_mut()
-            .and_then(|i| M::get_or(D::Mode::map(M::from_mut(i), |i| i.next()), || None))
+            .and_then(|i| D::Mode::get_or(D::Mode::map(D::Mode::from_mut(i), |i| i.next()), || None))
         {
             return Ok(Some(D::Mode::bind(move || item)));
         }
@@ -2717,9 +2719,9 @@ where
         loop {
             let before = inp.save();
             match self.parser.next::<D>(inp, st, debug) {
-                Ok(Some(item)) => match M::get_or(
+                Ok(Some(item)) => match D::Mode::get_or(
                     D::Mode::map(
-                        M::from_mut(iter.insert(D::Mode::map(item, |i| i.into_iter()))),
+                        D::Mode::from_mut(iter.insert(D::Mode::map(item, |i| i.into_iter()))),
                         |i| i.next().map(Some),
                     ),
                     || Some(None),
@@ -2761,7 +2763,7 @@ impl<A: Clone, B: Clone, OB> Clone for AndIs<A, B, OB> {
 
 impl<'src, I, E, A, B, OA, OB> Parser<'src, I, OA, E> for AndIs<A, B, OB>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
     B: Parser<'src, I, OB, E>,
@@ -2821,7 +2823,7 @@ impl<F: Clone, A: Clone, B: Clone, O, E> Clone for Fold<F, A, B, O, E> {
 
 impl<'src, I, F, A, B, O, E> Parser<'src, I, B, E> for Fold<F, A, B, O, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     A: IterParser<'src, I, O, E>,
     E: ParserExtra<'src, I>,
     B: Clone,
@@ -2876,7 +2878,7 @@ impl<F: Clone, A: Clone, B: Clone, OA, E> Clone for Foldr<F, A, B, OA, E> {
 
 impl<'src, I, F, A, B, O, OA, E> Parser<'src, I, O, E> for Foldr<F, A, B, OA, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     A: IterParser<'src, I, OA, E>,
     B: Parser<'src, I, O, E>,
     E: ParserExtra<'src, I>,
@@ -2949,7 +2951,7 @@ impl<F: Clone, A: Clone, B: Clone, OA, E> Clone for FoldrWith<F, A, B, OA, E> {
 
 impl<'src, I, F, A, B, O, OA, E> Parser<'src, I, O, E> for FoldrWith<F, A, B, OA, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     A: IterParser<'src, I, OA, E>,
     B: Parser<'src, I, O, E>,
     E: ParserExtra<'src, I>,
@@ -3015,7 +3017,7 @@ impl<F: Clone, A: Clone, B: Clone, OB, E> Clone for Foldl<F, A, B, OB, E> {
 
 impl<'src, I, F, A, B, O, OB, E> Parser<'src, I, O, E> for Foldl<F, A, B, OB, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     A: Parser<'src, I, O, E>,
     B: IterParser<'src, I, OB, E>,
     E: ParserExtra<'src, I>,
@@ -3082,7 +3084,7 @@ impl<F: Clone, A: Clone, B: Clone, OB, E> Clone for FoldlWith<F, A, B, OB, E> {
 
 impl<'src, I, F, A, B, O, OB, E> Parser<'src, I, O, E> for FoldlWith<F, A, B, OB, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     A: Parser<'src, I, O, E>,
     B: IterParser<'src, I, OB, E>,
     E: ParserExtra<'src, I>,
@@ -3138,7 +3140,7 @@ pub struct Rewind<A> {
 
 impl<'src, I, O, E, A> Parser<'src, I, O, E> for Rewind<A>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E>,
 {
@@ -3185,7 +3187,7 @@ pub struct MapErr<A, F> {
 
 impl<'src, I, O, E, A, F> Parser<'src, I, O, E> for MapErr<A, F>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E>,
     F: Fn(E::Error) -> E::Error,
@@ -3218,10 +3220,10 @@ where
 
 // impl<'src, I, O, E, A, F> Parser<'src, I, O, E> for MapErrWithSpan<A, F>
 // where
-//     I: Input<'src>,
+//     I: Input + 'src,
 //     E: ParserExtra<'src, I>,
 //     A: Parser<'src, I, O, E>,
-//     F: Fn(E::Error, I::Span) -> E::Error,
+//     F: Fn(E::Error, SpanOf<'src,I>) -> E::Error,
 // {
 //     #[inline(always)]
 //     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O>
@@ -3254,10 +3256,10 @@ pub struct MapErrWithState<A, F> {
 
 impl<'src, I, O, E, A, F> Parser<'src, I, O, E> for MapErrWithState<A, F>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E>,
-    F: Fn(E::Error, I::Span, &mut E::State) -> E::Error,
+    F: Fn(E::Error, SpanOf<'src,I>, &mut E::State) -> E::Error,
 {
     #[inline(always)]
     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O>
@@ -3314,7 +3316,7 @@ impl<A: Clone, OA, F: Clone> Clone for Validate<A, OA, F> {
 
 impl<'src, I, OA, U, E, A, F> Parser<'src, I, U, E> for Validate<A, OA, F>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, OA, E>,
     F: Fn(OA, &mut MapExtra<'src, '_, I, E>, &mut Emitter<E::Error>) -> U,
@@ -3357,7 +3359,7 @@ where
 
 // impl<'src, I, O, E, A, F> Parser<'src, I, O, E> for OrElse<A, F>
 // where
-//     I: Input<'src>,
+//     I: Input + 'src,
 //     E: ParserExtra<'src, I>,
 //     A: Parser<'src, I, O, E>,
 //     F: Fn(E::Error) -> Result<O, E::Error>,
@@ -3400,7 +3402,7 @@ pub struct Contextual<A> {
 
 impl<'src, I, O, E, A> Parser<'src, I, O, E> for Contextual<A>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E>,
 {
@@ -3414,7 +3416,7 @@ where
 
 impl<'src, I, O, E, A> ConfigParser<'src, I, O, E> for Contextual<A>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     A: Parser<'src, I, O, E>,
 {

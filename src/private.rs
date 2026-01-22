@@ -59,7 +59,7 @@ pub trait Mode {
     /// `dyn Parser`.
     fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
     where
-        I: Input<'a>,
+        I: Input + 'a,
         E: ParserExtra<'a, I>,
         P: Parser<'a, I, O, E> + ?Sized;
 
@@ -68,7 +68,7 @@ pub trait Mode {
         inp: &mut InputRef<'a, '_, I, E>,
     ) -> PResult<Self, O>
     where
-        I: Input<'a>,
+        I: Input + 'a,
         E: ParserExtra<'a, I>,
         P: Parser<'a, I, O, E> + ?Sized;
 
@@ -81,7 +81,7 @@ pub trait Mode {
         cfg: P::Config,
     ) -> PResult<Self, O>
     where
-        I: Input<'a>,
+        I: Input + 'a,
         E: ParserExtra<'a, I>,
         P: ConfigParser<'a, I, O, E> + ?Sized;
 
@@ -94,7 +94,7 @@ pub trait Mode {
     ) -> pratt::OperatorResult<Self::Output<O>, ()>
     where
         Op: pratt::Operator<'src, I, O, E>,
-        I: Input<'src>,
+        I: Input,
         E: ParserExtra<'src, I>;
     #[cfg(feature = "pratt")]
     fn invoke_pratt_op_postfix<'src, 'parse, Op, I, O, E>(
@@ -107,7 +107,7 @@ pub trait Mode {
     ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
     where
         Op: pratt::Operator<'src, I, O, E>,
-        I: Input<'src>,
+        I: Input,
         E: ParserExtra<'src, I>;
     #[cfg(feature = "pratt")]
     fn invoke_pratt_op_infix<'src, 'parse, Op, I, O, E>(
@@ -121,7 +121,7 @@ pub trait Mode {
     ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
     where
         Op: pratt::Operator<'src, I, O, E>,
-        I: Input<'src>,
+        I: Input,
         E: ParserExtra<'src, I>;
 }
 
@@ -175,7 +175,7 @@ impl Mode for Emit {
     #[inline(always)]
     fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
     where
-        I: Input<'a>,
+        I: Input + 'a,
         E: ParserExtra<'a, I>,
         P: Parser<'a, I, O, E> + ?Sized,
     {
@@ -186,7 +186,7 @@ impl Mode for Emit {
         inp: &mut InputRef<'a, '_, I, E>,
     ) -> PResult<Self, O>
     where
-        I: Input<'a>,
+        I: Input + 'a,
         E: ParserExtra<'a, I>,
         P: Parser<'a, I, O, E> + ?Sized,
     {
@@ -200,7 +200,7 @@ impl Mode for Emit {
         cfg: P::Config,
     ) -> PResult<Self, O>
     where
-        I: Input<'a>,
+        I: Input + 'a,
         E: ParserExtra<'a, I>,
         P: ConfigParser<'a, I, O, E> + ?Sized,
     {
@@ -217,7 +217,7 @@ impl Mode for Emit {
     ) -> pratt::OperatorResult<Self::Output<O>, ()>
     where
         Op: pratt::Operator<'src, I, O, E>,
-        I: Input<'src>,
+        I: Input,
         E: ParserExtra<'src, I>,
     {
         op.do_parse_prefix_emit(inp, pre_expr, &f)
@@ -234,7 +234,7 @@ impl Mode for Emit {
     ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
     where
         Op: pratt::Operator<'src, I, O, E>,
-        I: Input<'src>,
+        I: Input,
         E: ParserExtra<'src, I>,
     {
         op.do_parse_postfix_emit(inp, pre_expr, pre_op, lhs, min_power)
@@ -252,7 +252,7 @@ impl Mode for Emit {
     ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
     where
         Op: pratt::Operator<'src, I, O, E>,
-        I: Input<'src>,
+        I: Input,
         E: ParserExtra<'src, I>,
     {
         op.do_parse_infix_emit(inp, pre_expr, pre_op, lhs, min_power, &f)
@@ -297,7 +297,7 @@ impl Mode for Check {
     #[inline(always)]
     fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
     where
-        I: Input<'a>,
+        I: Input + 'a,
         E: ParserExtra<'a, I>,
         P: Parser<'a, I, O, E> + ?Sized,
     {
@@ -309,7 +309,7 @@ impl Mode for Check {
         inp: &mut InputRef<'a, '_, I, E>,
     ) -> PResult<Self, O>
     where
-        I: Input<'a>,
+        I: Input + 'a,
         E: ParserExtra<'a, I>,
         P: Parser<'a, I, O, E> + ?Sized,
     {
@@ -323,7 +323,7 @@ impl Mode for Check {
         cfg: P::Config,
     ) -> PResult<Self, O>
     where
-        I: Input<'a>,
+        I: Input + 'a,
         E: ParserExtra<'a, I>,
         P: ConfigParser<'a, I, O, E> + ?Sized,
     {
@@ -340,7 +340,7 @@ impl Mode for Check {
     ) -> pratt::OperatorResult<Self::Output<O>, ()>
     where
         Op: pratt::Operator<'src, I, O, E>,
-        I: Input<'src>,
+        I: Input,
         E: ParserExtra<'src, I>,
     {
         op.do_parse_prefix_check(inp, pre_expr, &f)
@@ -357,7 +357,7 @@ impl Mode for Check {
     ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
     where
         Op: pratt::Operator<'src, I, O, E>,
-        I: Input<'src>,
+        I: Input,
         E: ParserExtra<'src, I>,
     {
         op.do_parse_postfix_check(inp, pre_expr, pre_op, lhs, min_power)
@@ -375,7 +375,7 @@ impl Mode for Check {
     ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
     where
         Op: pratt::Operator<'src, I, O, E>,
-        I: Input<'src>,
+        I: Input,
         E: ParserExtra<'src, I>,
     {
         op.do_parse_infix_check(inp, pre_expr, pre_op, lhs, min_power, &f)
@@ -420,7 +420,7 @@ pub trait Driver {
         inp: &mut InputRef<'a, '_, I, E>,
     ) -> PResult<Self::Mode, O>
     where
-        I: Input<'a>,
+        I: Input + 'a,
         E: ParserExtra<'a, I>,
         P: Parser<'a, I, O, E> + ?Sized;
 
@@ -430,7 +430,7 @@ pub trait Driver {
         cfg: P::Config,
     ) -> PResult<Self::Mode, O>
     where
-        I: Input<'a>,
+        I: Input + 'a,
         E: ParserExtra<'a, I>,
         P: ConfigParser<'a, I, O, E> + ?Sized;
 }
@@ -449,7 +449,7 @@ impl<M: Mode, P: Policy> Driver for Drive<M, P> {
         inp: &mut InputRef<'a, '_, I, E>,
     ) -> PResult<Self::Mode, O>
     where
-        I: Input<'a>,
+        I: Input + 'a,
         E: ParserExtra<'a, I>,
         Pa: Parser<'a, I, O, E> + ?Sized,
     {
@@ -466,7 +466,7 @@ impl<M: Mode, P: Policy> Driver for Drive<M, P> {
         cfg: Pa::Config,
     ) -> PResult<Self::Mode, O>
     where
-        I: Input<'a>,
+        I: Input+'a,
         E: ParserExtra<'a, I>,
         Pa: ConfigParser<'a, I, O, E> + ?Sized,
     {
@@ -489,4 +489,8 @@ pub type CheckStrict = Drive<Check, Strict>;
 pub type EmitRecover = Drive<Emit, Recover>;
 pub type CheckRecover = Drive<Check, Recover>;
 
-pub trait Sealed {}
+pub type DriverOut<D,O> = <<D as Driver>::Mode as Mode>::Output<O>;
+
+pub trait Sealed: Sized {}
+pub struct Bounds<T>(T);
+impl<T> Sealed for Bounds<T> {}

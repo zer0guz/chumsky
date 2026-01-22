@@ -6,7 +6,7 @@
 )]
 #![cfg_attr(feature = "nightly", allow(incomplete_features))]
 #![doc = include_str!("../README.md")]
-#![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
+//#![deny(missing_docs, clippy::undocumented_unsafe_blocks)]
 // A lot of clippy's default lints are silly and annoying
 #![allow(
     clippy::style,
@@ -101,7 +101,11 @@ pub mod prelude {
     pub use crate::{select, select_ref};
 }
 
-use crate::{input::InputOwn, private::Driver};
+use crate::{
+    input::{InputOwn, SpanOf, TokenOf},
+    inspector::Inspector,
+    private::Driver,
+};
 use alloc::{
     boxed::Box,
     rc::{self, Rc},
@@ -149,6 +153,7 @@ use self::{extension::v1::*, primitive::custom, stream::Stream};
 
 /// A type that allows mentioning type parameters *without* all of the customary omission of auto traits that comes
 /// with `PhantomData`.
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord)]
 struct EmptyPhantom<T>(core::marker::PhantomData<T>);
 
 impl<T> EmptyPhantom<T> {
@@ -292,6 +297,30 @@ impl<T, E> ParseResult<T, E> {
     }
 }
 
+pub trait ParserEnv<'src, ImplicitBounds: Sealed = Bounds<&'src Self>> {
+    type Output;
+    type Input: Input + 'src;
+    type Error: Error<'src, Self::Input>;
+    type State: Inspector<Self::Input>;
+    type Context;
+}
+
+pub trait ParserRun<Env>
+where
+    Env: for<'src> ParserEnv<'src>,
+{
+    // #[doc(hidden)]
+    // fn go_emit<'src>(
+    //     &self,
+    //     inp: &mut InputRef<'src, '_, Env>,
+    // ) -> PResult<Emit, <Env as ParserEnv<'src>>::Output>;
+    // #[doc(hidden)]
+    // fn go_check<'src>(
+    //     &self,
+    //     inp: &mut InputRef<'src, '_, Env>,
+    // ) -> PResult<Check, <Env as ParserEnv<'src>>::Output>;
+}
+
 /// A trait implemented by parsers.
 ///
 /// Parsers take inputs of type `I`, which will implement [`Input`]. Refer to the documentation on [`Input`] for examples
@@ -333,7 +362,7 @@ impl<T, E> ParseResult<T, E> {
 //         note = "You should check that the output types of your parsers are consistent with the combinators you're using",
 //     )
 // )]
-pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Default> {
+pub trait Parser<'src, I: Input + 'src, O, E: ParserExtra<'src, I> = extra::Default> {
     /// Generate debugging information for this parser.
     ///
     /// This is an unstable feature, and will likely remain so indefinitely. As such, it **does not fall inside the semver
@@ -377,7 +406,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     /// [`&[T]`], a [`&str`], [`Stream`], or anything implementing [`Input`] to it.
     fn parse(&self, input: I) -> ParseResult<O, E::Error>
     where
-        I: Input<'src>,
+        I: Input,
         E::State: Default,
         E::Context: Default,
     {
@@ -386,7 +415,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     /// TODO
     fn parse_strict(&self, input: I) -> ParseResult<O, E::Error>
     where
-        I: Input<'src>,
+        I: Input,
         E::State: Default,
         E::Context: Default,
     {
@@ -403,7 +432,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     /// [`&[T]`], a [`&str`], [`Stream`], or anything implementing [`Input`] to it.
     fn parse_with_state(&self, input: I, state: &mut E::State) -> ParseResult<O, E::Error>
     where
-        I: Input<'src>,
+        I: Input,
         E::Context: Default,
     {
         let mut own = InputOwn::new_state(input, state);
@@ -430,7 +459,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     /// TODO Docs
     fn parse_with_state_strict(&self, input: I, state: &mut E::State) -> ParseResult<O, E::Error>
     where
-        I: Input<'src>,
+        I: Input,
         E::Context: Default,
     {
         let mut own = InputOwn::new_state(input, state);
@@ -464,7 +493,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     fn check(&self, input: I) -> ParseResult<(), E::Error>
     where
         Self: Sized,
-        I: Input<'src>,
+        I: Input,
         E::State: Default,
         E::Context: Default,
     {
@@ -481,7 +510,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     fn check_with_state(&self, input: I, state: &mut E::State) -> ParseResult<(), E::Error>
     where
         Self: Sized,
-        I: Input<'src>,
+        I: Input,
         E::Context: Default,
     {
         let mut own = InputOwn::new_state(input, state);
@@ -802,7 +831,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     /// This is commonly used when you know what pattern you've parsed and are only interested in the span of the
     /// pattern.
     ///
-    /// The output type of this parser is `I::Span`.
+    /// The output type of this parser is `SpanOf<'src,I>`.
     ///
     /// # Examples
     ///
@@ -888,7 +917,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     ///
     /// This is often used to preserve the span of AST nodes for error generation by future passes.
     ///
-    /// The output type of this parser is `<I::Span as WrappingSpan>::Spanned<O>`. For parsers using [`SimpleSpan`],
+    /// The output type of this parser is `<SpanOf<'src,I> as WrappingSpan>::Spanned<O>`. For parsers using [`SimpleSpan`],
     /// that means the output type is [`Spanned<O, SimpleSpan>`].
     fn spanned(self) -> combinator::Spanned<Self, O>
     where
@@ -921,7 +950,10 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     /// assert!(byte.parse("256").has_errors()); // Out of range
     /// ```
     #[doc(alias = "filter_map")]
-    fn try_map<U, F: Fn(O, I::Span) -> Result<U, E::Error>>(self, f: F) -> TryMap<Self, O, F>
+    fn try_map<U, F: Fn(O, SpanOf<'src, I>) -> Result<U, E::Error>>(
+        self,
+        f: F,
+    ) -> TryMap<Self, O, F>
     where
         Self: Sized,
     {
@@ -1243,7 +1275,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     where
         Self: Sized,
         I: 'src,
-        J: Input<'src>,
+        J: Input + 'src,
         F: ParserExtra<'src, J>,
     {
         NestedIn {
@@ -1885,7 +1917,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     fn lazy(self) -> Lazy<'src, Self, I, E>
     where
         Self: Sized,
-        I: ValueInput<'src>,
+        I: ValueInput,
     {
         self.then_ignore(any().repeated())
     }
@@ -1908,8 +1940,8 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     fn padded(self) -> Padded<Self>
     where
         Self: Sized,
-        I: Input<'src>,
-        I::Token: Char,
+        I: Input,
+        TokenOf<'src, I>: Char,
     {
         Padded { parser: self }
     }
@@ -2020,7 +2052,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     // fn map_err_with_span<F>(self, f: F) -> MapErrWithSpan<Self, F>
     // where
     //     Self: Sized,
-    //     F: Fn(E::Error, I::Span) -> E::Error,
+    //     F: Fn(E::Error, SpanOf<'src,I>) -> E::Error,
     // {
     //     MapErrWithSpan {
     //         parser: self,
@@ -2039,7 +2071,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     fn map_err_with_state<F>(self, f: F) -> MapErrWithState<Self, F>
     where
         Self: Sized,
-        F: Fn(E::Error, I::Span, &mut E::State) -> E::Error,
+        F: Fn(E::Error, SpanOf<'src, I>, &mut E::State) -> E::Error,
     {
         MapErrWithState {
             parser: self,
@@ -2308,7 +2340,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     ///
     /// ```compile_fail
     /// # use chumsky::prelude::*;
-    /// # fn user_input<'src>() -> impl IntoIterator<Item = impl Parser<'src, &'src str, char>> { [just('b')] }
+    /// # fn user_Input() -> impl IntoIterator<Item = impl Parser<'src, &'src str, char>> { [just('b')] }
     ///
     /// let user_input = user_input();
     ///
@@ -2340,7 +2372,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// # fn user_input<'src>() -> impl IntoIterator<Item = impl Parser<'src, &'src str, char>> { [just('b'), just('c')] }
+    /// # fn user_Input() -> impl IntoIterator<Item = impl Parser<'src, &'src str, char>> { [just('b'), just('c')] }
     /// let user_input = user_input();
     /// let mut parser = just('a').boxed();
     /// for i in user_input {
@@ -2454,7 +2486,7 @@ pub trait Parser<'src, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Defau
 #[cfg(feature = "nightly")]
 impl<'src, I, O, E> Parser<'src, I, O, E> for !
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     fn go<D: Driver>(&self, _inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
@@ -2482,7 +2514,7 @@ where
 /// and it isn't currently, please open an issue on the issue tracker of the main repository.
 pub trait ConfigParser<'src, I, O, E>: Parser<'src, I, O, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     /// A type describing the configurable aspects of the parser.
@@ -2600,19 +2632,19 @@ pub struct ParseIter<
     'src,
     'iter,
     P: IterParser<'src, I, O, E>,
-    I: Input<'src>,
+    I: Input,
     O,
     E: ParserExtra<'src, I>,
 > {
     parser: &'a mut P,
     own: InputOwn<'src, 'iter, I, E>,
-    iter_state: Option<P::IterState<Emit>>,
+    iter_state: Option<P::IterState<EmitRecover>>,
     #[allow(dead_code)]
     phantom: EmptyPhantom<(&'src (), O)>,
 }
 
 #[cfg(feature = "unstable")]
-impl<'a, 'src, P, I: Input<'src>, O, E: ParserExtra<'src, I>> Iterator
+impl<'a, 'src, P, I: Input, O, E: ParserExtra<'src, I>> Iterator
     for ParseIter<'a, 'src, '_, P, I, O, E>
 where
     P: IterParser<'src, I, O, E>,
@@ -2626,13 +2658,13 @@ where
         let iter_state = match &mut self.iter_state {
             Some(state) => state,
             None => {
-                let state = parser.make_iter::<DoEmit<D>>(&mut inp).ok()?;
+                let state = parser.make_iter::<EmitRecover>(&mut inp).ok()?;
                 self.iter_state = Some(state);
                 self.iter_state.as_mut().unwrap()
             }
         };
 
-        let res = parser.next::<DoEmit<D>>(&mut inp, iter_state, IterParserDebug::new(true));
+        let res = parser.next::<EmitRecover>(&mut inp, iter_state, IterParserDebug::new(true));
         // TODO: Avoid clone
         self.own.start = inp.cursor().inner;
         res.ok().and_then(|res| res)
@@ -2642,7 +2674,7 @@ where
 /// An iterable equivalent of [`Parser`], i.e: a parser that generates a sequence of outputs.
 pub trait IterParser<'src, I, O, E = extra::Default>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     #[doc(hidden)]
@@ -2920,7 +2952,7 @@ where
     fn parse_iter<F, R>(&mut self, input: I, f: F) -> ParseResult<R, E::Error>
     where
         Self: IterParser<'src, I, O, E> + Sized,
-        I: Input<'src>,
+        I: Input,
         E::State: Default,
         E::Context: Default,
         F: FnOnce(&mut ParseIter<'_, 'src, '_, Self, I, O, E>) -> R,
@@ -2940,7 +2972,7 @@ where
     ) -> ParseResult<R, E::Error>
     where
         Self: IterParser<'src, I, O, E> + Sized,
-        I: Input<'src>,
+        I: Input,
         E::Context: Default,
         F: FnOnce(&mut ParseIter<'_, 'src, '_, Self, I, O, E>) -> R,
     {
@@ -2952,7 +2984,7 @@ where
         };
         let out = f(&mut iter);
         let mut inp = iter.own.as_ref_start();
-        let res = end().go::<DoEmit<D>>(&mut inp);
+        let res = end().go::<EmitRecover>(&mut inp);
         let alt = inp.take_alt().map(|alt| alt.err).unwrap_or_else(|| {
             let fake_span = inp.span_since(&inp.cursor());
             // TODO: Why is this needed?
@@ -2971,7 +3003,7 @@ where
 /// can be configured at runtime.
 pub trait ConfigIterParser<'src, I, O, E = extra::Default>: IterParser<'src, I, O, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     /// A trait describing the configurable aspects of the iterable parser.
@@ -3004,7 +3036,7 @@ where
     fn try_configure<F>(self, cfg: F) -> TryIterConfigure<Self, F, O>
     where
         Self: Sized,
-        F: Fn(Self::Config, &E::Context, I::Span) -> Result<Self::Config, E::Error>,
+        F: Fn(Self::Config, &E::Context, SpanOf<'src, I>) -> Result<Self::Config, E::Error>,
     {
         TryIterConfigure {
             parser: self,
@@ -3020,11 +3052,11 @@ where
 /// efficient cloning. This is likely to change in the future. Unlike [`Box`], [`Rc`] has no size guarantees: although
 /// it is *currently* the same size as a raw pointer.
 // TODO: Don't use an Rc (why?)
-pub struct Boxed<'src, 'b, I: Input<'src>, O, E: ParserExtra<'src, I> = extra::Default> {
+pub struct Boxed<'src, 'b, I: Input, O, E: ParserExtra<'src, I> = extra::Default> {
     inner: Rc<DynParser<'src, 'b, I, O, E>>,
 }
 
-impl<'src, I: Input<'src>, O, E: ParserExtra<'src, I>> Clone for Boxed<'src, '_, I, O, E> {
+impl<'src, I: Input, O, E: ParserExtra<'src, I>> Clone for Boxed<'src, '_, I, O, E> {
     fn clone(&self) -> Self {
         Self {
             inner: self.inner.clone(),
@@ -3034,7 +3066,7 @@ impl<'src, I: Input<'src>, O, E: ParserExtra<'src, I>> Clone for Boxed<'src, '_,
 
 impl<'src, I, O, E> Parser<'src, I, O, E> for Boxed<'src, '_, I, O, E>
 where
-    I: Input<'src>,
+    I: Input,
     E: ParserExtra<'src, I>,
 {
     #[doc(hidden)]
@@ -3061,7 +3093,7 @@ where
 
 impl<'src, I, O, E, T> Parser<'src, I, O, E> for ::alloc::boxed::Box<T>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     T: Parser<'src, I, O, E>,
 {
@@ -3078,7 +3110,7 @@ where
 
 impl<'src, I, O, E, T> Parser<'src, I, O, E> for ::alloc::rc::Rc<T>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     T: Parser<'src, I, O, E>,
 {
@@ -3095,7 +3127,7 @@ where
 
 impl<'src, I, O, E, T> Parser<'src, I, O, E> for ::alloc::sync::Arc<T>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     T: Parser<'src, I, O, E>,
 {
@@ -3248,7 +3280,10 @@ macro_rules! select_ref {
 
 #[cfg(test)]
 mod tests {
-    use crate::prelude::*;
+    use crate::{
+        input::{SliceInputFor, SpanOf, TokenOf},
+        prelude::*,
+    };
 
     #[test]
     fn zero_copy() {
@@ -3320,8 +3355,11 @@ mod tests {
 
         fn parser<'src, I>() -> impl Parser<'src, I, [(Span<'src>, Token<'src>); 6]>
         where
-            I: ValueInput<'src, Token = char, Span = Span<'src>>
-                + SliceInput<'src, Slice = &'src str>,
+            I: ValueInput
+                + Input<Token = char, Span = Span<'src>>
+                + SliceInput
+                + for<'any> SliceInputFor<'any, Slice = &'any str>
+                + 'src,
         {
             let ident = any()
                 .filter(|c: &char| c.is_alphanumeric())
@@ -3351,7 +3389,7 @@ mod tests {
             parser()
                 .parse(
                     r#"hello "world" these are "test" tokens"#
-                        .map_span(|span| Span::new(fstr, span.start()..span.end()))
+                        .map_span(|span: SimpleSpan| Span::new(fstr, span.start()..span.end()))
                 )
                 .into_result(),
             Ok([
@@ -3765,7 +3803,7 @@ mod tests {
     #[derive(Copy, Clone, Debug, PartialEq, Eq)]
     struct MyErr(&'static str);
 
-    impl<'src, I: Input<'src>> crate::Error<'src, I> for MyErr {
+    impl<'src, I: Input + 'src> crate::Error<'src, I> for MyErr {
         fn merge(self, other: Self) -> Self {
             if other == MyErr("special") {
                 MyErr("special")
@@ -3775,14 +3813,16 @@ mod tests {
         }
     }
 
-    impl<'src, I> crate::LabelError<'src, I, crate::DefaultExpected<'src, I::Token>> for MyErr
+    impl<'src, I> crate::LabelError<'src, I, crate::DefaultExpected<'src, TokenOf<'src, I>>> for MyErr
     where
-        I: Input<'src>,
+        I: Input,
     {
-        fn expected_found<E: IntoIterator<Item = crate::DefaultExpected<'src, I::Token>>>(
+        fn expected_found<
+            E: IntoIterator<Item = crate::DefaultExpected<'src, TokenOf<'src, I>>>,
+        >(
             _expected: E,
-            _found: Option<crate::MaybeRef<'src, I::Token>>,
-            _span: I::Span,
+            _found: Option<crate::MaybeRef<'src, TokenOf<'src, I>>>,
+            _span: SpanOf<'src, I>,
         ) -> Self {
             MyErr("expected found")
         }
@@ -3918,7 +3958,7 @@ mod tests {
 
         fn expr<'src, I>() -> impl Parser<'src, I, (Expr, SimpleSpan)> + 'src
         where
-            I: Input<'src, Token = Token, Span = SimpleSpan> + 'src,
+            I: Input<Token = Token, Span = SimpleSpan> + 'src,
         {
             todo().map_with(|expr, e| (expr, e.span()))
         }

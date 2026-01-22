@@ -6,7 +6,7 @@
 //! The parsers in this module are generic over both Unicode ([`char`]) and ASCII ([`u8`]) characters. Most parsers take
 //! a type parameter, `C`, that can be either [`u8`] or [`char`] in order to handle either case.
 
-use crate::prelude::*;
+use crate::{input::SliceOf, prelude::*};
 use alloc::string::ToString;
 
 use super::*;
@@ -194,9 +194,9 @@ pub struct Padded<A> {
 
 impl<'src, I, O, E, A> Parser<'src, I, O, E> for Padded<A>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
-    I::Token: Char,
+    TokenOf<'src, I>: Char,
     A: Parser<'src, I, O, E>,
 {
     #[doc(hidden)]
@@ -261,13 +261,13 @@ impl<Slice: Copy> Copy for TextExpected<Slice> {}
 /// ```
 pub fn whitespace<'src, I, E>() -> Repeated<impl Parser<'src, I, (), E> + Copy, (), I, E>
 where
-    I: StrInput<'src>,
-    I::Token: Char + 'src,
+    I: StrInput + 'src,
+    for<'any> TokenOf<'any, I>: Char,
     E: ParserExtra<'src, I>,
     E::Error: LabelError<'src, I, TextExpected<()>>,
 {
     any()
-        .filter(|c: &I::Token| c.is_whitespace())
+        .filter(|c: &TokenOf<'src, I>| c.is_whitespace())
         .labelled_with(|| TextExpected::Whitespace)
         .as_builtin()
         .ignored()
@@ -295,13 +295,13 @@ where
 /// ```
 pub fn inline_whitespace<'src, I, E>() -> Repeated<impl Parser<'src, I, (), E> + Copy, (), I, E>
 where
-    I: StrInput<'src>,
-    I::Token: Char + 'src,
+    I: StrInput + 'src,
+    for<'any> TokenOf<'any, I>: Char,
     E: ParserExtra<'src, I>,
     E::Error: LabelError<'src, I, TextExpected<()>>,
 {
     any()
-        .filter(|c: &I::Token| c.is_inline_whitespace())
+        .filter(|c: &TokenOf<'src, I>| c.is_inline_whitespace())
         .labelled_with(|| TextExpected::InlineWhitespace)
         .as_builtin()
         .ignored()
@@ -341,10 +341,9 @@ where
 #[must_use]
 pub fn newline<'src, I, E>() -> impl Parser<'src, I, (), E> + Copy
 where
-    I: StrInput<'src>,
-    I::Token: Char + 'src,
+    I: StrInput + 'src,
+    for<'any> TokenOf<'any, I>: Char,
     E: ParserExtra<'src, I>,
-    &'src str: OrderedSeq<'src, I::Token>,
     E::Error: LabelError<'src, I, TextExpected<()>>,
 {
     custom(|inp| {
@@ -352,19 +351,19 @@ where
 
         if inp
             .peek()
-            .map_or(false, |c: I::Token| c.to_ascii() == Some(b'\r'))
+            .map_or(false, |c: TokenOf<'src, I>| c.to_ascii() == Some(b'\r'))
         {
             inp.skip();
             if inp
                 .peek()
-                .map_or(false, |c: I::Token| c.to_ascii() == Some(b'\n'))
+                .map_or(false, |c: TokenOf<'src, I>| c.to_ascii() == Some(b'\n'))
             {
                 inp.skip();
             }
             Ok(())
         } else {
             let c = inp.next();
-            if c.map_or(false, |c: I::Token| c.is_newline()) {
+            if c.map_or(false, |c: TokenOf<'src, I>| c.is_newline()) {
                 Ok(())
             } else {
                 let span = inp.span_since(&before);
@@ -382,8 +381,8 @@ where
 
 /// A parser that accepts one or more ASCII digits.
 ///
-/// The output type of this parser is `I::Slice` (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`]
-/// when `I::Slice` is [`&[u8]`]).
+/// The output type of this parser is `SliceOf<'src,I>` (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`]
+/// when `SliceOf<'src,I>` is [`&[u8]`]).
 ///
 /// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10`.
 ///
@@ -404,15 +403,15 @@ where
 #[must_use]
 pub fn digits<'src, I, E>(
     radix: u32,
-) -> Repeated<impl Parser<'src, I, <I as Input<'src>>::Token, E> + Copy, I::Token, I, E>
+) -> Repeated<impl Parser<'src, I, TokenOf<'src, I>, E> + Copy, TokenOf<'src, I>, I, E>
 where
-    I: StrInput<'src>,
-    I::Token: Char + 'src,
+    I: StrInput + 'src,
+    for<'any> TokenOf<'any, I>: Char,
     E: ParserExtra<'src, I>,
     E::Error: LabelError<'src, I, TextExpected<()>>,
 {
     any()
-        .filter(move |c: &I::Token| c.is_digit(radix))
+        .filter(move |c: &TokenOf<'src, I>| c.is_digit(radix))
         .labelled_with(move || TextExpected::Digit(0, radix))
         .as_builtin()
         .map_err(move |mut err: E::Error| {
@@ -428,8 +427,8 @@ where
 /// An integer is defined as a non-empty sequence of ASCII digits, where the first digit is non-zero or the sequence
 /// has length one.
 ///
-/// The output type of this parser is `I::Slice` (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`]
-/// when `I::Slice` is [`&[u8]`]).
+/// The output type of this parser is `SliceOf<'src,I>` (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`]
+/// when `SliceOf<'src,I>` is [`&[u8]`]).
 ///
 /// The `radix` parameter functions identically to [`char::is_digit`]. If in doubt, choose `10`.
 ///
@@ -454,22 +453,25 @@ where
 /// ```
 ///
 #[must_use]
-pub fn int<'src, I, E>(radix: u32) -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Copy
+pub fn int<'src, I, E>(radix: u32) -> impl Parser<'src, I, SliceOf<'src, I>, E> + Copy
 where
-    I: StrInput<'src>,
-    I::Token: Char + 'src,
+    I: StrInput + 'src,
+    for<'any> TokenOf<'any, I>: Char,
     E: ParserExtra<'src, I>,
-    E::Error: LabelError<'src, I, TextExpected<()>> + LabelError<'src, I, MaybeRef<'src, I::Token>>,
+    E::Error: LabelError<'src, I, TextExpected<()>>
+        + LabelError<'src, I, MaybeRef<'src, TokenOf<'src, I>>>,
 {
     any()
-        .filter(move |c: &I::Token| c.is_digit(radix) && c != &I::Token::digit_zero())
+        .filter(move |c: &TokenOf<'src, I>| {
+            c.is_digit(radix) && c != &TokenOf::<'src, I>::digit_zero()
+        })
         .then(
             any()
-                .filter(move |c: &I::Token| c.is_digit(radix))
+                .filter(move |c: &TokenOf<'src, I>| c.is_digit(radix))
                 .repeated(),
         )
         .ignored()
-        .or(just(I::Token::digit_zero()).ignored())
+        .or(just(TokenOf::<'src, I>::digit_zero()).ignored())
         .to_slice()
         .labelled_with(|| TextExpected::Int)
         .as_builtin()
@@ -487,21 +489,21 @@ pub mod ascii {
     /// An identifier is defined as an ASCII alphabetic character or an underscore followed by any number of alphanumeric
     /// characters or underscores. The regex pattern for it is `[a-zA-Z_][a-zA-Z0-9_]*`.
     #[must_use]
-    pub fn ident<'src, I, E>() -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Copy
+    pub fn ident<'src, I, E>() -> impl Parser<'src, I, SliceOf<'src, I>, E> + Copy
     where
-        I: StrInput<'src>,
-        I::Token: Char + 'src,
+        I: StrInput + 'src,
+        for<'any> TokenOf<'any, I>: Char,
         E: ParserExtra<'src, I>,
         E::Error: LabelError<'src, I, TextExpected<()>>,
     {
         any()
-            .filter(|c: &I::Token| {
+            .filter(|c: &TokenOf<'src, I>| {
                 c.to_ascii()
                     .map_or(false, |i| i.is_ascii_alphabetic() || i == b'_')
             })
             .then(
                 any()
-                    .filter(|c: &I::Token| {
+                    .filter(|c: &TokenOf<'src, I>| {
                         c.to_ascii()
                             .map_or(false, |i| i.is_ascii_alphanumeric() || i == b'_')
                     })
@@ -514,8 +516,8 @@ pub mod ascii {
 
     /// Like [`ident`], but only accepts a specific identifier while rejecting trailing identifier characters.
     ///
-    /// The output type of this parser is `I::Slice` (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`]
-    /// when `I::Slice` is [`&[u8]`]).
+    /// The output type of this parser is `SliceOf<'src,I>` (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`]
+    /// when `SliceOf<'src,I>` is [`&[u8]`]).
     ///
     /// # Examples
     ///
@@ -534,11 +536,11 @@ pub mod ascii {
     #[track_caller]
     pub fn keyword<'src, I, S, E>(
         keyword: S,
-    ) -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Clone + 'src
+    ) -> impl Parser<'src, I, SliceOf<'src, I>, E> + Clone + 'src
     where
-        I: StrInput<'src>,
-        I::Token: Char + fmt::Debug + 'src,
-        S: PartialEq<I::Slice> + Clone + 'src,
+        I: StrInput + 'src,
+        for<'any> TokenOf<'any, I>: Char,
+        S: PartialEq<SliceOf<'src, I>> + Clone + 'src,
         E: ParserExtra<'src, I> + 'src,
         E::Error: LabelError<'src, I, TextExpected<()>> + LabelError<'src, I, TextExpected<S>>,
     {
@@ -561,7 +563,7 @@ pub mod ascii {
         ident()
             .try_map({
                 let keyword = keyword.clone();
-                move |s: I::Slice, span| {
+                move |s: SliceOf<'src, I>, span| {
                     if keyword == s {
                         Ok(())
                     } else {
@@ -584,6 +586,8 @@ pub use unicode::*;
 
 /// Parsers and utilities for working with unicode inputs.
 pub mod unicode {
+    use crate::input::{CacheOf, CursorOf, InputFor, MaybeTokenOf, SliceInputFor};
+
     use super::*;
 
     use core::str::{Bytes, Chars};
@@ -842,14 +846,13 @@ pub mod unicode {
     }
 
     impl Sealed for &'_ Graphemes {}
-    impl<'src> StrInput<'src> for &'src Graphemes {
+    impl<'src> StrInput for &'src Graphemes {
         #[doc(hidden)]
-        fn stringify(slice: Self::Slice) -> String {
+        fn stringify(slice: SliceOf<'src, Self>) -> String {
             slice.to_string()
         }
     }
-
-    impl<'src> Input<'src> for &'src Graphemes {
+    impl<'src> InputFor<'src> for &Graphemes {
         type Cursor = usize;
         type Span = SimpleSpan<usize>;
 
@@ -857,22 +860,24 @@ pub mod unicode {
         type MaybeToken = &'src Grapheme;
 
         type Cache = Self;
+    }
 
+    impl Input for &Graphemes {
         #[inline]
-        fn begin(self) -> (Self::Cursor, Self::Cache) {
+        fn begin<'src>(self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
             (0, self)
         }
 
         #[inline]
-        fn cursor_location(cursor: &Self::Cursor) -> usize {
+        fn cursor_location<'src>(cursor: &CursorOf<'src, Self>) -> usize {
             *cursor
         }
 
         #[inline(always)]
-        unsafe fn next_maybe(
-            this: &mut Self::Cache,
-            cursor: &mut Self::Cursor,
-        ) -> Option<Self::MaybeToken> {
+        unsafe fn next_maybe<'src>(
+            this: &mut CacheOf<'src, Self>,
+            cursor: &mut CursorOf<'src, Self>,
+        ) -> Option<MaybeTokenOf<'src, Self>> {
             if *cursor < this.as_str().len() {
                 // SAFETY: `cursor < self.len()` above guarantees cursor is in-bounds
                 //         We only ever return cursors that are at a code point boundary.
@@ -881,12 +886,13 @@ pub mod unicode {
                 //         And the Unicode standard guarantees that any sequence of code
                 //         points is a valid sequence of grapheme clusters, so the
                 //         behaviour of the `next()` function should not change.
-                let c = unsafe { this
-                    .as_str()
-                    .get_unchecked(*cursor..)
-                    .graphemes(true)
-                    .next()
-                    .unwrap_unchecked() };
+                let c = unsafe {
+                    this.as_str()
+                        .get_unchecked(*cursor..)
+                        .graphemes(true)
+                        .next()
+                        .unwrap_unchecked()
+                };
                 *cursor += c.len();
                 Some(Grapheme::new(c))
             } else {
@@ -895,43 +901,57 @@ pub mod unicode {
         }
 
         #[inline(always)]
-        unsafe fn span(_this: &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Span {
+        unsafe fn span<'src>(
+            _this: &mut CacheOf<'src, Self>,
+            range: Range<&CursorOf<'src, Self>>,
+        ) -> SpanOf<'src, Self> {
             (*range.start..*range.end).into()
         }
     }
 
-    impl<'src> ExactSizeInput<'src> for &'src Graphemes {
+    impl ExactSizeInput for &Graphemes {
         #[inline(always)]
-        unsafe fn span_from(this: &mut Self::Cache, range: RangeFrom<&Self::Cursor>) -> Self::Span {
+        unsafe fn span_from<'src>(
+            this: &mut CacheOf<'src, Self>,
+            range: RangeFrom<&CursorOf<'src, Self>>,
+        ) -> SpanOf<'src, Self> {
             (*range.start..this.as_str().len()).into()
         }
     }
 
-    impl<'src> ValueInput<'src> for &'src Graphemes {
+    impl ValueInput for &Graphemes {
         #[inline(always)]
-        unsafe fn next(this: &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
+        unsafe fn next<'src>(
+            this: &mut CacheOf<'src, Self>,
+            cursor: &mut CursorOf<'src, Self>,
+        ) -> Option<TokenOf<'src, Self>> {
             unsafe { Self::next_maybe(this, cursor) }
         }
     }
 
-    impl<'src> SliceInput<'src> for &'src Graphemes {
+    impl<'src> SliceInputFor<'src> for &Graphemes {
         type Slice = Self;
+    }
 
+    impl SliceInput for &Graphemes {
         #[inline(always)]
-        fn full_slice(this: &mut Self::Cache) -> Self::Slice {
+        fn full_slice<'src>(this: &mut CacheOf<'src, Self>) -> SliceOf<'src, Self> {
             *this
         }
 
         #[inline(always)]
-        unsafe fn slice(this: &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Slice {
+        unsafe fn slice<'src>(
+            this: &mut CacheOf<'src, Self>,
+            range: Range<&CursorOf<'src, Self>>,
+        ) -> SliceOf<'src, Self> {
             Graphemes::new(&this.as_str()[*range.start..*range.end])
         }
 
         #[inline(always)]
-        unsafe fn slice_from(
-            this: &mut Self::Cache,
-            from: RangeFrom<&Self::Cursor>,
-        ) -> Self::Slice {
+        unsafe fn slice_from<'src>(
+            this: &mut CacheOf<'src, Self>,
+            from: RangeFrom<&CursorOf<'src, Self>>,
+        ) -> SliceOf<'src, Self> {
             Graphemes::new(&this.as_str()[*from.start..])
         }
     }
@@ -984,18 +1004,18 @@ pub mod unicode {
     ///
     /// An identifier is defined as per "Default Identifiers" in [Unicode Standard Annex #31](https://www.unicode.org/reports/tr31/).
     #[must_use]
-    pub fn ident<'src, I, E>() -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Copy
+    pub fn ident<'src, I, E>() -> impl Parser<'src, I, SliceOf<'src, I>, E> + Copy
     where
-        I: StrInput<'src>,
-        I::Token: Char + 'src,
+        I: StrInput + 'src,
+        for<'any> TokenOf<'any, I>: Char,
         E: ParserExtra<'src, I>,
         E::Error: LabelError<'src, I, TextExpected<()>>,
     {
         any()
-            .filter(|c: &I::Token| c.is_ident_start())
+            .filter(|c: &TokenOf<'src, I>| c.is_ident_start())
             .then(
                 any()
-                    .filter(|c: &I::Token| c.is_ident_continue())
+                    .filter(|c: &TokenOf<'src, I>| c.is_ident_continue())
                     .repeated(),
             )
             .to_slice()
@@ -1005,8 +1025,8 @@ pub mod unicode {
 
     /// Like [`ident`], but only accepts a specific identifier while rejecting trailing identifier characters.
     ///
-    /// The output type of this parser is `I::Slice` (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`]
-    /// when `I::Slice` is [`&[u8]`]).
+    /// The output type of this parser is `SliceOf<'src,I>` (i.e: [`&str`] when `I` is [`&str`], and [`&[u8]`]
+    /// when `SliceOf<'src,I>` is [`&[u8]`]).
     ///
     /// # Examples
     ///
@@ -1023,15 +1043,13 @@ pub mod unicode {
     /// assert!(def.lazy().parse("define").has_errors());
     /// ```
     #[track_caller]
-    pub fn keyword<'src, I, S, E>(
-        keyword: S,
-    ) -> impl Parser<'src, I, <I as SliceInput<'src>>::Slice, E> + Clone + 'src
+    pub fn keyword<'src, I, S, E>(keyword: S) -> impl Parser<'src, I, SliceOf<'src, I>, E> + Clone
     where
-        I: StrInput<'src>,
-        I::Slice: PartialEq,
-        I::Token: Char + fmt::Debug + 'src,
-        S: PartialEq<I::Slice> + Clone + 'src,
-        E: ParserExtra<'src, I> + 'src,
+        I: StrInput + 'src,
+        for<'any> SliceOf<'any, I>: PartialEq,
+        for<'any> TokenOf<'any, I>: Char,
+        S: PartialEq<SliceOf<'src, I>> + Clone,
+        E: ParserExtra<'src, I>,
         E::Error: LabelError<'src, I, TextExpected<()>> + LabelError<'src, I, TextExpected<S>>,
     {
         /*
@@ -1057,7 +1075,7 @@ pub mod unicode {
         ident()
             .try_map({
                 let keyword = keyword.clone();
-                move |s: I::Slice, span| {
+                move |s: SliceOf<'_, I>, span| {
                     if keyword == s {
                         Ok(())
                     } else {
@@ -1095,23 +1113,27 @@ pub mod unicode {
 
 #[cfg(test)]
 mod tests {
-    use crate::prelude::*;
+    use crate::{
+        input::{SliceOf, StrInput, TokenOf},
+        prelude::*,
+        text::Char,
+    };
     use std::fmt;
 
-    fn make_ascii_kw_parser<'src, I>(s: I::Slice) -> impl Parser<'src, I, ()>
+    fn make_ascii_kw_parser<I>(s: SliceOf<'_, I>) -> impl Parser<'_, I, ()>
     where
-        I: crate::StrInput<'src>,
-        I::Slice: PartialEq,
-        I::Token: crate::Char + fmt::Debug + 'src,
+        I: StrInput,
+        for<'any> SliceOf<'any, I>: PartialEq,
+        for<'any> TokenOf<'any, I>: Char + fmt::Debug + 'any,
     {
         text::ascii::keyword(s).ignored()
     }
 
-    fn make_unicode_kw_parser<'src, I>(s: I::Slice) -> impl Parser<'src, I, ()>
+    fn make_unicode_kw_parser<I>(s: SliceOf<'_, I>) -> impl Parser<'_, I, ()>
     where
-        I: crate::StrInput<'src>,
-        I::Slice: PartialEq,
-        I::Token: crate::Char + fmt::Debug + 'src,
+        I: StrInput,
+        for<'any> SliceOf<'any, I>: PartialEq,
+        for<'any> TokenOf<'any, I>: Char + fmt::Debug,
     {
         text::unicode::keyword(s).ignored()
     }
@@ -1164,7 +1186,7 @@ mod tests {
 
     #[test]
     fn whitespace() {
-        use crate::{whitespace, LabelError, TextExpected};
+        use crate::{LabelError, TextExpected, whitespace};
 
         let parser = whitespace::<&str, extra::Err<Rich<_>>>().exactly(1);
 

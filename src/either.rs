@@ -6,12 +6,12 @@ use ::either::Either;
 
 impl<'src, L, R, I, O, E> Parser<'src, I, O, E> for Either<L, R>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     L: Parser<'src, I, O, E>,
     R: Parser<'src, I, O, E>,
 {
-    fn go<M: crate::private::Mode>(
+    fn go<D: Driver>(
         &self,
         inp: &mut crate::input::InputRef<'src, '_, I, E>,
     ) -> crate::private::PResult<D::Mode, O>

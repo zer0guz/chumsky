@@ -100,7 +100,7 @@ mod current {
     ///
     /// pub trait ParserExt<'src, I, O, E>
     /// where
-    ///     I: Input<'src>,
+    ///     I: Input,
     ///     E: extra::ParserExtra<'src, I>
     /// {
     ///     fn frobnicated_with<B>(self, other: B) -> FrobnicatedWith<Self, B>
@@ -114,7 +114,7 @@ mod current {
     /// ```
     ///
     /// Now, users can import your trait and do `a.frobnicate_with(b)` as if your parser were native to chumsky!
-    pub trait ExtParser<'src, I: Input<'src>, O, E: ParserExtra<'src, I>> {
+    pub trait ExtParser<'src, I: Input, O, E: ParserExtra<'src, I>> {
         /// Attempt parsing on the given input.
         ///
         /// See [`InputRef`] for more information about how you can work with parser inputs.
@@ -153,7 +153,7 @@ mod current {
 
     impl<'src, I, O, E, P> Parser<'src, I, O, E> for Ext<P>
     where
-        I: Input<'src>,
+        I: Input,
         E: ParserExtra<'src, I>,
         P: ExtParser<'src, I, O, E>,
     {

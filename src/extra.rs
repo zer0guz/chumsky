@@ -19,17 +19,17 @@ type DefaultCtx = ();
 /// go through the types defined in this module.
 pub trait ParserExtra<'a, I>: Sealed
 where
-    I: Input<'a>,
+    I: Input + 'a,
 {
     /// Error type to use for the parser. This type must implement [`Error`], and when it fails,
     /// the parser will return a set of this type to describe why the failure occurred.
-    type Error: Error<'a, I>;
+    type Error: Error<'a,I>;
     /// State type to use for the parser. This is used to provide stateful *output* of the parser,
     /// such as interned identifiers or position-dependent name resolution, however *cannot* influence
     /// the actual progress of the parser - for that, use [`Self::Context`].
     ///
     /// For examples of using this type, see [`Parser::map_with`] or [`Parser::foldl_with`].
-    type State: Inspector<'a, I>;
+    type State: Inspector<I>;
     /// Context used for parser configuration. This is used to provide context-sensitive parsing of *input*.
     /// Context-sensitive parsing in chumsky is always left-hand sensitive - context for the parse must originate
     /// from an earlier point in the stream than the parser relying on it. This can affect the output of a parser,
@@ -62,9 +62,9 @@ pub struct Full<E, S, C>(PhantomData<(E, S, C)>);
 impl<E, S, C> Sealed for Full<E, S, C> {}
 impl<'a, I, E, S, C> ParserExtra<'a, I> for Full<E, S, C>
 where
-    I: Input<'a>,
+    I: Input + 'a,
     E: Error<'a, I>,
-    S: Inspector<'a, I>,
+    S: Inspector<I>,
     C: 'a,
 {
     type Error = E;

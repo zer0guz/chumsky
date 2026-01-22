@@ -15,6 +15,8 @@
 //! - [`none_of`]: parses any input that does not appear in a sequence of inputs
 //! - [`end`]: parses the end of input (i.e: if there any more inputs, this parse fails)
 
+use crate::input::InputFor;
+
 use super::*;
 
 /// See [`end`].
@@ -23,7 +25,7 @@ pub struct End<I, E>(EmptyPhantom<(E, I)>);
 /// A parser that accepts only the end of input.
 ///
 /// The output type of this parser is `()`.
-pub const fn end<'src, I: Input<'src>, E: ParserExtra<'src, I>>() -> End<I, E> {
+pub const fn end<'src, I: Input +'src, E: ParserExtra<'src, I>>() -> End<I, E> {
     End(EmptyPhantom::new())
 }
 
@@ -36,7 +38,7 @@ impl<I, E> Clone for End<I, E> {
 
 impl<'src, I, E> Parser<'src, I, (), E> for End<I, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     #[inline]
@@ -72,7 +74,7 @@ impl<I, E> Clone for Empty<I, E> {
 
 impl<'src, I, E> Parser<'src, I, (), E> for Empty<I, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     #[inline]
@@ -139,10 +141,10 @@ impl<T: Clone, I, E> Clone for Just<T, I, E> {
 /// ```
 pub const fn just<'src, T, I, E>(seq: T) -> Just<T, I, E>
 where
-    I: Input<'src>,
+    I: Input + 'src + 'src,
     E: ParserExtra<'src, I>,
-    I::Token: PartialEq,
-    T: OrderedSeq<'src, I::Token> + Clone,
+    TokenOf<'src,I>: PartialEq,
+    T: OrderedSeq<'src, TokenOf<'src,I>> + Clone,
 {
     Just {
         seq,
@@ -152,10 +154,10 @@ where
 
 impl<'src, I, E, T> Parser<'src, I, T, E> for Just<T, I, E>
 where
-    I: Input<'src>,
+    I: Input + 'src + 'src,
     E: ParserExtra<'src, I>,
-    I::Token: PartialEq,
-    T: OrderedSeq<'src, I::Token> + Clone,
+    TokenOf<'src,I>: PartialEq,
+    T: OrderedSeq<'src, TokenOf<'src,I>> + Clone,
 {
     #[doc(hidden)]
     #[cfg(feature = "debug")]
@@ -173,10 +175,10 @@ where
 
 impl<'src, I, E, T> ConfigParser<'src, I, T, E> for Just<T, I, E>
 where
-    I: Input<'src>,
+    I: Input + 'src + 'src,
     E: ParserExtra<'src, I>,
-    I::Token: PartialEq,
-    T: OrderedSeq<'src, I::Token> + Clone,
+    TokenOf<'src,I>: PartialEq,
+    T: OrderedSeq<'src, TokenOf<'src,I>> + Clone,
 {
     type Config = JustCfg<T>;
 
@@ -241,10 +243,10 @@ impl<T: Clone, I, E> Clone for OneOf<T, I, E> {
 /// ```
 pub const fn one_of<'src, T, I, E>(seq: T) -> OneOf<T, I, E>
 where
-    I: ValueInput<'src>,
+    I: ValueInput + 'src,
     E: ParserExtra<'src, I>,
-    I::Token: PartialEq,
-    T: Seq<'src, I::Token>,
+    TokenOf<'src,I>: PartialEq,
+    T: Seq<'src, TokenOf<'src,I>>,
 {
     OneOf {
         seq,
@@ -252,12 +254,12 @@ where
     }
 }
 
-impl<'src, I, E, T> Parser<'src, I, I::Token, E> for OneOf<T, I, E>
+impl<'src, I, E, T> Parser<'src, I, TokenOf<'src,I>, E> for OneOf<T, I, E>
 where
-    I: ValueInput<'src>,
+    I: ValueInput,
     E: ParserExtra<'src, I>,
-    I::Token: PartialEq,
-    T: Seq<'src, I::Token>,
+    TokenOf<'src,I>: PartialEq,
+    T: Seq<'src, TokenOf<'src,I>>,
 {
     #[doc(hidden)]
     #[cfg(feature = "debug")]
@@ -266,7 +268,7 @@ where
     }
 
     #[inline]
-    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, I::Token> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, TokenOf<'src,I>> {
         let before = inp.save();
         match inp.next_inner() {
             Some(tok) if self.seq.contains(tok.borrow()) => Ok(D::Mode::bind(|| tok)),
@@ -277,7 +279,7 @@ where
         }
     }
 
-    go_extra!(I::Token);
+    go_extra!(TokenOf<'src,I>);
 }
 
 /// See [`none_of`].
@@ -315,10 +317,10 @@ impl<T: Clone, I, E> Clone for NoneOf<T, I, E> {
 /// ```
 pub const fn none_of<'src, T, I, E>(seq: T) -> NoneOf<T, I, E>
 where
-    I: ValueInput<'src>,
+    I: ValueInput + 'src,
     E: ParserExtra<'src, I>,
-    I::Token: PartialEq,
-    T: Seq<'src, I::Token>,
+    TokenOf<'src,I>: PartialEq,
+    T: Seq<'src, TokenOf<'src,I>>,
 {
     NoneOf {
         seq,
@@ -326,12 +328,12 @@ where
     }
 }
 
-impl<'src, I, E, T> Parser<'src, I, I::Token, E> for NoneOf<T, I, E>
+impl<'src, I, E, T> Parser<'src, I, TokenOf<'src,I>, E> for NoneOf<T, I, E>
 where
-    I: ValueInput<'src>,
+    I: ValueInput,
     E: ParserExtra<'src, I>,
-    I::Token: PartialEq,
-    T: Seq<'src, I::Token>,
+    TokenOf<'src,I>: PartialEq,
+    T: Seq<'src, TokenOf<'src,I>>,
 {
     #[doc(hidden)]
     #[cfg(feature = "debug")]
@@ -340,7 +342,7 @@ where
     }
 
     #[inline]
-    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, I::Token> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, TokenOf<'src,I>> {
         let before = inp.save();
         match inp.next_inner() {
             Some(tok) if !self.seq.contains(tok.borrow()) => Ok(D::Mode::bind(|| tok)),
@@ -351,7 +353,7 @@ where
         }
     }
 
-    go_extra!(I::Token);
+    go_extra!(TokenOf<'src,I>);
 }
 
 /// See [`custom`].
@@ -399,7 +401,7 @@ impl<F: Clone, I, O, E> Clone for Custom<F, I, O, E> {
 /// ```
 pub const fn custom<'src, F, I, O, E>(f: F) -> Custom<F, I, O, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     F: Fn(&mut InputRef<'src, '_, I, E>) -> Result<O, E::Error>,
 {
@@ -411,7 +413,7 @@ where
 
 impl<'src, I, O, E, F> Parser<'src, I, O, E> for Custom<F, I, O, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     F: Fn(&mut InputRef<'src, '_, I, E>) -> Result<O, E::Error>,
 {
@@ -450,10 +452,10 @@ impl<F: Clone, I, O, E> Clone for Select<F, I, O, E> {
 /// See [`select!`].
 pub const fn select<'src, F, I, O, E>(filter: F) -> Select<F, I, O, E>
 where
-    I: Input<'src>,
-    I::Token: Clone + 'src,
+    I: Input + 'src + 'src,
+    TokenOf<'src,I>: Clone,
     E: ParserExtra<'src, I>,
-    F: Fn(I::Token, &mut MapExtra<'src, '_, I, E>) -> Option<O>,
+    F: Fn(TokenOf<'src,I>, &mut MapExtra<'src, '_, I, E>) -> Option<O>,
 {
     Select {
         filter,
@@ -463,10 +465,10 @@ where
 
 impl<'src, I, O, E, F> Parser<'src, I, O, E> for Select<F, I, O, E>
 where
-    I: Input<'src>,
-    I::Token: Clone + 'src,
+    I: Input + 'src + 'src ,
+    TokenOf<'src,I>: Clone + 'src,
     E: ParserExtra<'src, I>,
-    F: Fn(I::Token, &mut MapExtra<'src, '_, I, E>) -> Option<O>,
+    F: Fn(TokenOf<'src,I>, &mut MapExtra<'src, '_, I, E>) -> Option<O>,
 {
     #[doc(hidden)]
     #[cfg(feature = "debug")]
@@ -523,10 +525,9 @@ impl<F: Clone, I, O, E> Clone for SelectRef<F, I, O, E> {
 /// See [`select_ref!`].
 pub const fn select_ref<'src, F, I, O, E>(filter: F) -> SelectRef<F, I, O, E>
 where
-    I: BorrowInput<'src>,
-    I::Token: 'src,
+    I: BorrowInput + 'src,
     E: ParserExtra<'src, I>,
-    F: Fn(&'src I::Token, &mut MapExtra<'src, '_, I, E>) -> Option<O>,
+    F: Fn(&'src TokenOf<'src,I>, &mut MapExtra<'src, '_, I, E>) -> Option<O>,
 {
     SelectRef {
         filter,
@@ -536,10 +537,9 @@ where
 
 impl<'src, I, O, E, F> Parser<'src, I, O, E> for SelectRef<F, I, O, E>
 where
-    I: BorrowInput<'src>,
-    I::Token: 'src,
+    I: BorrowInput + 'src,
     E: ParserExtra<'src, I>,
-    F: Fn(&'src I::Token, &mut MapExtra<'src, '_, I, E>) -> Option<O>,
+    F: Fn(&'src TokenOf<'src,I>, &mut MapExtra<'src, '_, I, E>) -> Option<O>,
 {
     #[inline]
     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
@@ -580,9 +580,9 @@ impl<I, E> Clone for Any<I, E> {
     }
 }
 
-impl<'src, I, E> Parser<'src, I, I::Token, E> for Any<I, E>
+impl<'src, I, E> Parser<'src, I, TokenOf<'src,I>, E> for Any<I, E>
 where
-    I: ValueInput<'src>,
+    I: ValueInput,
     E: ParserExtra<'src, I>,
 {
     #[doc(hidden)]
@@ -592,7 +592,7 @@ where
     }
 
     #[inline]
-    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, I::Token> {
+    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, TokenOf<'src,I>> {
         let before = inp.save();
         match inp.next_inner() {
             Some(tok) => Ok(D::Mode::bind(|| tok)),
@@ -603,12 +603,12 @@ where
         }
     }
 
-    go_extra!(I::Token);
+    go_extra!(TokenOf<'src,I>);
 }
 
 /// A parser that accepts any input (but not the end of input).
 ///
-/// The output type of this parser is `I::Token`, the input that was found.
+/// The output type of this parser is `TokenOf<'src,I>`, the input that was found.
 ///
 /// # Examples
 ///
@@ -621,7 +621,7 @@ where
 /// assert_eq!(any.parse("\t").into_result(), Ok('\t'));
 /// assert!(any.parse("").has_errors());
 /// ```
-pub const fn any<'src, I: Input<'src>, E: ParserExtra<'src, I>>() -> Any<I, E> {
+pub const fn any<'src, I: Input + 'src, E: ParserExtra<'src, I>>() -> Any<I, E> {
     Any {
         phantom: EmptyPhantom::new(),
     }
@@ -640,32 +640,32 @@ impl<I, E> Clone for AnyRef<I, E> {
     }
 }
 
-impl<'src, I, E> Parser<'src, I, &'src I::Token, E> for AnyRef<I, E>
+impl<'src, I, E> Parser<'src, I, &'src TokenOf<'src,I>, E> for AnyRef<I, E>
 where
-    I: BorrowInput<'src>,
+    I: BorrowInput,
     E: ParserExtra<'src, I>,
 {
     #[inline]
     fn go<D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-    ) -> PResult<D::Mode, &'src I::Token> {
+    ) -> PResult<D::Mode, &'src TokenOf<'src,I>> {
         let before = inp.save();
         match inp.next_ref_inner() {
             Some(tok) => Ok(D::Mode::bind(|| tok)),
             found => inp.fail_rewind_with::<D, _, _, _>(before, |_inp, _span| {
-                let found = found.map(|f| f.into());
+                let found = found.map(|f: &_| f.into());
                 ([DefaultExpected::Any], found)
             }),
         }
     }
 
-    go_extra!(&'src I::Token);
+    go_extra!(&'src TokenOf<'src,I>);
 }
 
 /// A parser that accepts any input (but not the end of input).
 ///
-/// The output type of this parser is `&'src I::Token`, the input that was found.
+/// The output type of this parser is `&'src TokenOf<'src,I>`, the input that was found.
 ///
 /// This function is the borrowing equivalent of [any]. Where possible, it's recommended to use [any] instead.
 ///
@@ -681,7 +681,7 @@ where
 /// assert_eq!(any_ref_1.parse(&['\t'; 1]).into_result(), Ok(&'\t'));
 /// assert!(any_ref_0.parse(&[]).has_errors());
 /// ```
-pub const fn any_ref<'src, I: BorrowInput<'src>, E: ParserExtra<'src, I>>() -> AnyRef<I, E> {
+pub const fn any_ref<'src, I: BorrowInput + 'src, E: ParserExtra<'src, I>>() -> AnyRef<I, E> {
     AnyRef {
         phantom: EmptyPhantom::new(),
     }
@@ -708,7 +708,7 @@ impl<A: Clone, AE, F: Clone, E> Clone for MapCtx<A, AE, F, E> {
 
 impl<'src, I, O, E, EI, A, F> Parser<'src, I, O, E> for MapCtx<A, EI, F, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     EI: ParserExtra<'src, I, Error = E::Error, State = E::State>,
     A: Parser<'src, I, O, EI>,
@@ -780,7 +780,7 @@ where
 pub const fn map_ctx<'src, P, OP, I, E, EP, F>(mapper: F, parser: P) -> MapCtx<P, EP, F, E>
 where
     F: Fn(&E::Context) -> EP::Context,
-    I: Input<'src>,
+    I: Input + 'src,
     P: Parser<'src, I, OP, EP>,
     E: ParserExtra<'src, I>,
     EP: ParserExtra<'src, I>,
@@ -833,7 +833,7 @@ impl<I, O, E> Clone for Todo<I, O, E> {
 /// int.parse("0xd4");
 /// ```
 #[track_caller]
-pub fn todo<'src, I: Input<'src>, O, E: ParserExtra<'src, I>>() -> Todo<I, O, E> {
+pub fn todo<'src, I: Input + 'src, O, E: ParserExtra<'src, I>>() -> Todo<I, O, E> {
     Todo {
         location: *Location::caller(),
         phantom: EmptyPhantom::new(),
@@ -842,7 +842,7 @@ pub fn todo<'src, I: Input<'src>, O, E: ParserExtra<'src, I>>() -> Todo<I, O, E>
 
 impl<'src, I, O, E> Parser<'src, I, O, E> for Todo<I, O, E>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     #[inline]
@@ -922,7 +922,7 @@ macro_rules! impl_choice_for_tuple {
         #[allow(unused_variables, non_snake_case)]
         impl<'src, I, E, $Head, $($X),*, O> Parser<'src, I, O, E> for Choice<($Head, $($X,)*)>
         where
-            I: Input<'src>,
+            I: Input + 'src,
             E: ParserExtra<'src, I>,
             $Head: Parser<'src, I, O, E>,
             $($X: Parser<'src, I, O, E>),*
@@ -961,7 +961,7 @@ macro_rules! impl_choice_for_tuple {
     (~ $Head:ident) => {
         impl<'src, I, E, $Head, O> Parser<'src, I, O, E> for Choice<($Head,)>
         where
-            I: Input<'src>,
+            I: Input + 'src,
             E: ParserExtra<'src, I>,
             $Head:  Parser<'src, I, O, E>,
         {
@@ -980,7 +980,7 @@ impl_choice_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S_ 
 impl<'src, A, I, O, E> Parser<'src, I, O, E> for Choice<&[A]>
 where
     A: Parser<'src, I, O, E>,
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     #[inline]
@@ -1009,7 +1009,7 @@ where
 impl<'src, A, I, O, E> Parser<'src, I, O, E> for Choice<Vec<A>>
 where
     A: Parser<'src, I, O, E>,
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     #[inline]
@@ -1022,7 +1022,7 @@ where
 impl<'src, A, I, O, E, const N: usize> Parser<'src, I, O, E> for Choice<[A; N]>
 where
     A: Parser<'src, I, O, E>,
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     #[inline]
@@ -1048,7 +1048,7 @@ pub const fn group<T>(parsers: T) -> Group<T> {
 
 impl<'src, I, O, E, P, const N: usize> Parser<'src, I, [O; N], E> for Group<[P; N]>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     P: Parser<'src, I, O, E>,
 {
@@ -1111,7 +1111,7 @@ macro_rules! impl_group_for_tuple {
         #[allow(unused_variables, non_snake_case)]
         impl<'src, I, E, $($X),*, $($O),*> Parser<'src, I, ($($O,)*), E> for Group<($($X,)*)>
         where
-            I: Input<'src>,
+            I: Input + 'src,
             E: ParserExtra<'src, I>,
             $($X: Parser<'src, I, $O, E>),*
         {
@@ -1211,7 +1211,7 @@ fn go_or_finish<'src, O, I, E, P, D>(
     inp: &mut InputRef<'src, '_, I, E>,
 ) -> PResult<D::Mode, ()>
 where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     P: Parser<'src, I, O, E>,
     D: Driver,
@@ -1234,7 +1234,7 @@ fn go_or_rewind<'src, O, I, E, P, D>(
     parser: &P,
     inp: &mut InputRef<'src, '_, I, E>,
 ) where
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     P: Parser<'src, I, O, E>,
     D: Driver,
@@ -1265,7 +1265,7 @@ macro_rules! impl_set_for_tuple {
         #[allow(unused_variables, non_snake_case)]
         impl<'src, I, E, $($P),*, $($O,)*> Parser<'src, I, ($($O,)*), E> for Set<($($P,)*)>
         where
-            I: Input<'src>,
+            I: Input + 'src,
             E: ParserExtra<'src, I>,
             $($P: Parser<'src, I, $O, E>),*
         {
@@ -1302,7 +1302,7 @@ impl_set_for_tuple!(A1 A2 A3 B1 B2 B3 C1 C2 C3 D1 D2 D3 E1 E2 E3 F1 F2 F3 G1 G2 
 impl<'src, P, I, O, E> Parser<'src, I, Vec<O>, E> for Set<Vec<P>>
 where
     P: Parser<'src, I, O, E>,
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
 {
     #[inline]
@@ -1344,7 +1344,7 @@ where
 impl<'src, P, I, O, E, const N: usize> Parser<'src, I, [O; N], E> for Set<[P; N]>
 where
     P: Parser<'src, I, O, E>,
-    I: Input<'src>,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     // remove this requirement when MSRV > 1.80
     O: Copy,
