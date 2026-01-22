@@ -3,7 +3,7 @@
 //! Run it with the following command:
 //! cargo run --features=pratt,label --example mini_ml -- examples/sample.mini_ml
 
-use ariadne::{sources, Color, Label, Report, ReportKind};
+use ariadne::{Color, Label, Report, ReportKind, sources};
 use chumsky::{
     input::{Input as _, MappedInput},
     pratt::*,
@@ -50,8 +50,8 @@ impl fmt::Display for Token<'_> {
     }
 }
 
-fn lexer<'src>(
-) -> impl Parser<'src, &'src str, Vec<Spanned<Token<'src>>>, extra::Err<Rich<'src, char>>> {
+fn lexer<'src>()
+-> impl Parser<'src, &'src str, Vec<Spanned<Token<'src>>>, extra::Err<Rich<'src, char>>> {
     recursive(|token| {
         choice((
             // Keywords

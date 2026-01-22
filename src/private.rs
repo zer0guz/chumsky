@@ -489,4 +489,6 @@ pub type CheckStrict = Drive<Check, Strict>;
 pub type EmitRecover = Drive<Emit, Recover>;
 pub type CheckRecover = Drive<Check, Recover>;
 
+pub type DriverOut<D, O> = <<D as Driver>::Mode as Mode>::Output<O>;
+
 pub trait Sealed {}

@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Json {
@@ -50,16 +50,20 @@ fn bench_lex(c: &mut Criterion) {
         let parser = chumsky_zero_copy::parser();
         move |b| {
             b.iter(|| {
-                assert!(black_box(parser.check(black_box(SAMPLE)))
-                    .into_errors()
-                    .is_empty())
+                assert!(
+                    black_box(parser.check(black_box(SAMPLE)))
+                        .into_errors()
+                        .is_empty()
+                )
             })
         }
     });
 
     c.bench_function("lex_logos", |b| {
         b.iter(|| {
-            assert!(black_box(logos::lexer(black_box(SAMPLE))).all(|t| t != Ok(logos::Token::Error)))
+            assert!(
+                black_box(logos::lexer(black_box(SAMPLE))).all(|t| t != Ok(logos::Token::Error))
+            )
         })
     });
 }

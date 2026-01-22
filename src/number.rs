@@ -3,8 +3,8 @@
 use super::*;
 pub use lexical::format;
 
-use lexical::parse_partial;
 use lexical::FromLexical;
+use lexical::parse_partial;
 
 /// TODO: Add documentation when approved
 pub struct Number<const F: u128, I, O, E> {
@@ -48,8 +48,9 @@ where
             }
             Err(_err) => {
                 // TODO: Improve error
-                let span = inp.span_since(&before);
-                inp.add_alt([ExpectedNumber], None, span);
+                inp.add_alt_with::<D, _, _>(|inp| {
+                    ([ExpectedNumber], None, inp.span_since(&before))
+                });
                 Err(())
             }
         }
@@ -61,7 +62,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{extra, Parser};
+    use crate::{Parser, extra};
     use lexical::format::RUST_LITERAL;
 
     // These have been shamelessly yanked from the rust test-float-parse suite.

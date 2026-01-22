@@ -1,6 +1,6 @@
 #![allow(clippy::result_large_err, clippy::type_complexity)]
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 mod utils;
 
@@ -61,9 +61,11 @@ fn bench_json(c: &mut Criterion) {
         let json = chumsky_zero_copy::json::<EmptyErr>();
         move |b| {
             b.iter(|| {
-                assert!(black_box(json.check(black_box(JSON)))
-                    .into_errors()
-                    .is_empty())
+                assert!(
+                    black_box(json.check(black_box(JSON)))
+                        .into_errors()
+                        .is_empty()
+                )
             })
         }
     });
@@ -85,15 +87,17 @@ fn bench_json(c: &mut Criterion) {
         let json = chumsky_zero_copy::json::<Rich<u8>>();
         move |b| {
             b.iter(|| {
-                assert!(black_box(json.check(black_box(JSON)))
-                    .into_errors()
-                    .is_empty())
+                assert!(
+                    black_box(json.check(black_box(JSON)))
+                        .into_errors()
+                        .is_empty()
+                )
             })
         }
     });
 
     c.bench_function("json_serde_json", {
-        use serde_json::{from_slice, Value};
+        use serde_json::{Value, from_slice};
         move |b| b.iter(|| black_box(from_slice::<Value>(black_box(JSON)).unwrap()))
     });
 
@@ -126,8 +130,8 @@ mod chumsky_zero_copy {
     use super::JsonZero;
     use std::str;
 
-    pub fn json<'a, E: Error<'a, &'a [u8]> + 'a>(
-    ) -> impl Parser<'a, &'a [u8], JsonZero<'a>, extra::Err<E>> {
+    pub fn json<'a, E: Error<'a, &'a [u8]> + 'a>()
+    -> impl Parser<'a, &'a [u8], JsonZero<'a>, extra::Err<E>> {
         recursive(|value| {
             let digits = one_of(b'0'..=b'9').repeated();
 
@@ -189,8 +193,8 @@ mod chumsky_zero_copy {
 }
 
 mod pom {
-    use pom::parser::*;
     use pom::Parser;
+    use pom::parser::*;
 
     use super::Json;
     use std::str::{self, FromStr};
@@ -254,6 +258,7 @@ mod pom {
 
 mod nom {
     use nom::{
+        IResult,
         branch::alt,
         bytes::complete::{escaped, tag, take_while},
         character::complete::{char, digit0, digit1, none_of, one_of},
@@ -261,7 +266,6 @@ mod nom {
         error::ParseError,
         multi::separated_list0,
         sequence::{preceded, separated_pair, terminated, tuple},
-        IResult,
     };
 
     use super::JsonZero;
@@ -354,6 +358,7 @@ mod nom {
 
 mod nom8 {
     use nom8::{
+        IResult, Parser,
         branch::alt,
         bytes::{escaped, tag},
         character::{char, complete::digit0, digit1, multispace0, none_of, one_of},
@@ -361,7 +366,6 @@ mod nom8 {
         error::ParseError,
         multi::separated_list0,
         sequence::{preceded, separated_pair, terminated},
-        IResult, Parser,
     };
 
     use super::JsonZero;
@@ -457,6 +461,7 @@ mod nom8 {
 
 mod winnow {
     use winnow::{
+        Result,
         ascii::{digit0, digit1, take_escaped},
         combinator::separated,
         combinator::{alt, dispatch},
@@ -465,7 +470,6 @@ mod winnow {
         error::{EmptyError, ParserError},
         prelude::*,
         token::{any, none_of, one_of, take_while},
-        Result,
     };
 
     use super::JsonZero;
@@ -562,7 +566,7 @@ mod winnow {
 mod pest {
     use super::JsonZero;
 
-    use pest::{error::Error, Parser};
+    use pest::{Parser, error::Error};
 
     #[derive(pest_derive::Parser)]
     #[grammar = "benches/json.pest"]

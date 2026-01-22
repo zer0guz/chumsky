@@ -1,5 +1,5 @@
 use chumsky::prelude::*;
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion};
+use criterion::{BenchmarkId, Criterion, black_box, criterion_group, criterion_main};
 
 mod utils;
 
@@ -53,9 +53,11 @@ fn bench_choice(c: &mut Criterion) {
 
     group.bench_function(BenchmarkId::new("choice::<(A..Z)>", "0"), |b| {
         b.iter(|| {
-            assert!(black_box(alphabet_choice.parse(black_box("0")))
-                .into_result()
-                .is_err());
+            assert!(
+                black_box(alphabet_choice.parse(black_box("0")))
+                    .into_result()
+                    .is_err()
+            );
         })
     });
 }
@@ -108,9 +110,11 @@ fn bench_or(c: &mut Criterion) {
 
     group.bench_function(BenchmarkId::new("A.or(B)...or(Z)", "0"), |b| {
         b.iter(|| {
-            assert!(black_box(alphabet_or.parse(black_box("0")))
-                .into_result()
-                .is_err());
+            assert!(
+                black_box(alphabet_or.parse(black_box("0")))
+                    .into_result()
+                    .is_err()
+            );
         })
     });
 }
@@ -173,9 +177,11 @@ fn bench_group(c: &mut Criterion) {
 
     group.bench_function(BenchmarkId::new("group::<(A..Z)>", "0"), |b| {
         b.iter(|| {
-            assert!(black_box(alphabet_group.parse(black_box("0")))
-                .into_result()
-                .is_err());
+            assert!(
+                black_box(alphabet_group.parse(black_box("0")))
+                    .into_result()
+                    .is_err()
+            );
         })
     });
 }
@@ -236,9 +242,11 @@ fn bench_then(c: &mut Criterion) {
 
     group.bench_function(BenchmarkId::new("A.then(B)...then(Z)", "0"), |b| {
         b.iter(|| {
-            assert!(black_box(alphabet_then.parse(black_box("0")))
-                .into_result()
-                .is_err());
+            assert!(
+                black_box(alphabet_then.parse(black_box("0")))
+                    .into_result()
+                    .is_err()
+            );
         })
     });
 }

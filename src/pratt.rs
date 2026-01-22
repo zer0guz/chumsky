@@ -116,7 +116,7 @@ macro_rules! op_check_and_emit {
             >,
             f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Check, O>,
         ) -> OperatorResult<<Check as Mode>::Output<O>, ()> {
-            self.do_parse_prefix::<Check>(inp, pre_expr, &f)
+            self.do_parse_prefix::<CheckRecover>(inp, pre_expr, &f)
         }
         #[inline(always)]
         fn do_parse_prefix_emit<'parse>(
@@ -130,7 +130,7 @@ macro_rules! op_check_and_emit {
             >,
             f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Emit, O>,
         ) -> OperatorResult<<Emit as Mode>::Output<O>, ()> {
-            self.do_parse_prefix::<DoEmit<D>>(inp, pre_expr, &f)
+            self.do_parse_prefix::<EmitRecover>(inp, pre_expr, &f)
         }
         #[inline(always)]
         fn do_parse_postfix_check<'parse>(
@@ -146,7 +146,7 @@ macro_rules! op_check_and_emit {
             lhs: (),
             min_power: i32,
         ) -> OperatorResult<(), ()> {
-            self.do_parse_postfix::<Check>(inp, pre_expr, pre_op, lhs, min_power)
+            self.do_parse_postfix::<CheckRecover>(inp, pre_expr, pre_op, lhs, min_power)
         }
         #[inline(always)]
         fn do_parse_postfix_emit<'parse>(
@@ -162,7 +162,7 @@ macro_rules! op_check_and_emit {
             lhs: O,
             min_power: i32,
         ) -> OperatorResult<O, O> {
-            self.do_parse_postfix::<DoEmit<D>>(inp, pre_expr, pre_op, lhs, min_power)
+            self.do_parse_postfix::<EmitRecover>(inp, pre_expr, pre_op, lhs, min_power)
         }
         #[inline(always)]
         fn do_parse_infix_check<'parse>(
@@ -179,7 +179,7 @@ macro_rules! op_check_and_emit {
             min_power: i32,
             f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Check, O>,
         ) -> OperatorResult<(), ()> {
-            self.do_parse_infix::<Check>(inp, pre_expr, pre_op, lhs, min_power, &f)
+            self.do_parse_infix::<CheckRecover>(inp, pre_expr, pre_op, lhs, min_power, &f)
         }
         #[inline(always)]
         fn do_parse_infix_emit<'parse>(
@@ -196,7 +196,7 @@ macro_rules! op_check_and_emit {
             min_power: i32,
             f: &dyn Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Emit, O>,
         ) -> OperatorResult<O, O> {
-            self.do_parse_infix::<DoEmit<D>>(inp, pre_expr, pre_op, lhs, min_power, &f)
+            self.do_parse_infix::<EmitRecover>(inp, pre_expr, pre_op, lhs, min_power, &f)
         }
     };
 }
@@ -227,7 +227,7 @@ where
             <E::State as Inspector<'src, I>>::Checkpoint,
         >,
         _f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
-    ) -> OperatorResult<M::Output<O>, ()>
+    ) -> OperatorResult<DriverOut<D, O>, ()>
     where
         Self: Sized,
     {
@@ -241,9 +241,9 @@ where
         _inp: &mut InputRef<'src, 'parse, I, E>,
         _pre_expr: &input::Cursor<'src, 'parse, I>,
         _pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-        lhs: M::Output<O>,
+        lhs: DriverOut<D, O>,
         _min_power: i32,
-    ) -> OperatorResult<M::Output<O>, M::Output<O>>
+    ) -> OperatorResult<DriverOut<D, O>, DriverOut<D, O>>
     where
         Self: Sized,
     {
@@ -257,10 +257,10 @@ where
         _inp: &mut InputRef<'src, 'parse, I, E>,
         _pre_expr: &input::Cursor<'src, 'parse, I>,
         _pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-        lhs: M::Output<O>,
+        lhs: DriverOut<D, O>,
         _min_power: i32,
         _f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
-    ) -> OperatorResult<M::Output<O>, M::Output<O>>
+    ) -> OperatorResult<DriverOut<D, O>, DriverOut<D, O>>
     where
         Self: Sized,
     {
@@ -341,11 +341,11 @@ where
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
-    ) -> OperatorResult<M::Output<O>, ()>
+    ) -> OperatorResult<DriverOut<D, O>, ()>
     where
         Self: Sized,
     {
-        M::invoke_pratt_op_prefix(self, inp, pre_expr, f)
+        D::Mode::invoke_pratt_op_prefix(self, inp, pre_expr, f)
     }
 
     #[inline(always)]
@@ -354,13 +354,13 @@ where
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-        lhs: M::Output<O>,
+        lhs: DriverOut<D, O>,
         min_power: i32,
-    ) -> OperatorResult<M::Output<O>, M::Output<O>>
+    ) -> OperatorResult<DriverOut<D, O>, DriverOut<D, O>>
     where
         Self: Sized,
     {
-        M::invoke_pratt_op_postfix(self, inp, pre_expr, pre_op, lhs, min_power)
+        D::Mode::invoke_pratt_op_postfix(self, inp, pre_expr, pre_op, lhs, min_power)
     }
 
     #[inline(always)]
@@ -369,14 +369,14 @@ where
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-        lhs: M::Output<O>,
+        lhs: DriverOut<D, O>,
         min_power: i32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
-    ) -> OperatorResult<M::Output<O>, M::Output<O>>
+    ) -> OperatorResult<DriverOut<D, O>, DriverOut<D, O>>
     where
         Self: Sized,
     {
-        M::invoke_pratt_op_infix(self, inp, pre_expr, pre_op, lhs, min_power, f)
+        D::Mode::invoke_pratt_op_infix(self, inp, pre_expr, pre_op, lhs, min_power, f)
     }
 
     #[inline(always)]
@@ -569,10 +569,10 @@ where
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-        lhs: M::Output<O>,
+        lhs: DriverOut<D, O>,
         min_power: i32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
-    ) -> OperatorResult<M::Output<O>, M::Output<O>>
+    ) -> OperatorResult<DriverOut<D, O>, DriverOut<D, O>>
     where
         Self: Sized,
     {
@@ -681,7 +681,7 @@ where
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
-    ) -> OperatorResult<M::Output<O>, ()>
+    ) -> OperatorResult<DriverOut<D, O>, ()>
     where
         Self: Sized,
     {
@@ -766,9 +766,9 @@ where
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-        lhs: M::Output<O>,
+        lhs: DriverOut<D, O>,
         min_power: i32,
-    ) -> OperatorResult<M::Output<O>, M::Output<O>>
+    ) -> OperatorResult<DriverOut<D, O>, DriverOut<D, O>>
     where
         Self: Sized,
     {
@@ -817,7 +817,7 @@ macro_rules! impl_operator_for_tuple {
                 inp: &mut InputRef<'src, 'parse, I, E>,
                 pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
                 f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
-            ) -> OperatorResult<M::Output<O>, ()>
+            ) -> OperatorResult<DriverOut<D,O>, ()>
             where
                 Self: Sized,
             {
@@ -837,9 +837,9 @@ macro_rules! impl_operator_for_tuple {
                 inp: &mut InputRef<'src, 'parse, I, E>,
                 pre_expr: &input::Cursor<'src, 'parse, I>,
                 pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-                mut lhs: M::Output<O>,
+                mut lhs: DriverOut<D,O>,
                 min_power: i32,
-            ) -> OperatorResult<M::Output<O>, M::Output<O>>
+            ) -> OperatorResult<DriverOut<D,O>, DriverOut<D,O>>
             where
                 Self: Sized,
             {
@@ -859,10 +859,10 @@ macro_rules! impl_operator_for_tuple {
                 inp: &mut InputRef<'src, 'parse, I, E>,
                 pre_expr: &input::Cursor<'src, 'parse, I>,
                 pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-                mut lhs: M::Output<O>,
+                mut lhs: DriverOut<D,O>,
                 min_power: i32,
                 f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
-            ) -> OperatorResult<M::Output<O>, M::Output<O>>
+            ) -> OperatorResult<DriverOut<D,O>, DriverOut<D,O>>
             where
                 Self: Sized,
             {
@@ -896,7 +896,7 @@ where
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
-    ) -> OperatorResult<M::Output<O>, ()>
+    ) -> OperatorResult<DriverOut<D, O>, ()>
     where
         Self: Sized,
     {
@@ -915,9 +915,9 @@ where
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-        mut lhs: M::Output<O>,
+        mut lhs: DriverOut<D, O>,
         min_power: i32,
-    ) -> OperatorResult<M::Output<O>, M::Output<O>>
+    ) -> OperatorResult<DriverOut<D, O>, DriverOut<D, O>>
     where
         Self: Sized,
     {
@@ -936,10 +936,10 @@ where
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
-        mut lhs: M::Output<O>,
+        mut lhs: DriverOut<D, O>,
         min_power: i32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
-    ) -> OperatorResult<M::Output<O>, M::Output<O>>
+    ) -> OperatorResult<DriverOut<D, O>, DriverOut<D, O>>
     where
         Self: Sized,
     {
@@ -974,7 +974,7 @@ impl<'src, Atom, Ops> Pratt<Atom, Ops> {
         let mut lhs = match self
             .ops
             .do_parse_prefix::<D>(inp, &pre_expr, &|inp, min_power| {
-                recursive::recurse(|| self.pratt_go::<D::Mode, _, _, _>(inp, min_power))
+                recursive::recurse(|| self.pratt_go::<D, _, _, _>(inp, min_power))
             }) {
             OperatorResult::Ok(out) => out,
             OperatorResult::NoMatch(()) => self.atom.go::<D>(inp)?,
@@ -1008,7 +1008,7 @@ impl<'src, Atom, Ops> Pratt<Atom, Ops> {
                 lhs,
                 min_power,
                 &|inp, min_power| {
-                    recursive::recurse(|| self.pratt_go::<D::Mode, _, _, _>(inp, min_power))
+                    recursive::recurse(|| self.pratt_go::<D, _, _, _>(inp, min_power))
                 },
             ) {
                 OperatorResult::Ok(out) => {
@@ -1039,7 +1039,7 @@ where
     Ops: Operator<'src, I, O, E>,
 {
     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
-        self.pratt_go::<D::Mode, _, _, _>(inp, i32::MIN)
+        self.pratt_go::<D, _, _, _>(inp, i32::MIN)
     }
 
     go_extra!(O);
@@ -1051,11 +1051,7 @@ mod tests {
     use crate::{extra::Err, prelude::*};
 
     fn factorial(x: i64) -> i64 {
-        if x == 0 {
-            1
-        } else {
-            x * factorial(x - 1)
-        }
+        if x == 0 { 1 } else { x * factorial(x - 1) }
     }
 
     fn parser<'src>() -> impl Parser<'src, &'src str, i64> {
@@ -1310,8 +1306,8 @@ mod tests {
         )
     }
 
-    fn non_associative_parser<'src>(
-    ) -> impl Parser<'src, &'src str, String, Err<Simple<'src, char>>> {
+    fn non_associative_parser<'src>()
+    -> impl Parser<'src, &'src str, String, Err<Simple<'src, char>>> {
         let atom = text::int(10).from_str().unwrapped().map(Expr::Literal);
 
         atom.pratt((

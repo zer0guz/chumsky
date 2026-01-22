@@ -71,8 +71,8 @@ enum SExpr {
 //     - Has an input type of type `I`, the one we declared as a type parameter
 //     - Produces an `SExpr` as its output
 //     - Uses `Rich`, a built-in error type provided by chumsky, for error generation
-fn parser<'tokens, 'src: 'tokens, I>(
-) -> impl Parser<'tokens, I, SExpr, extra::Err<Rich<'tokens, Token<'src>>>>
+fn parser<'tokens, 'src: 'tokens, I>()
+-> impl Parser<'tokens, I, SExpr, extra::Err<Rich<'tokens, Token<'src>>>>
 where
     I: ValueInput<'tokens, Token = Token<'src>, Span = SimpleSpan>,
 {

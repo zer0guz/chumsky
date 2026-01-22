@@ -135,6 +135,7 @@ use self::{
     input::{
         BorrowInput, Emitter, ExactSizeInput, InputRef, MapExtra, SliceInput, StrInput, ValueInput,
     },
+    inspector::*,
     label::{LabelError, Labelled, LabelledWith},
     prelude::*,
     primitive::Any,
@@ -2606,7 +2607,7 @@ pub struct ParseIter<
 > {
     parser: &'a mut P,
     own: InputOwn<'src, 'iter, I, E>,
-    iter_state: Option<P::IterState<Emit>>,
+    iter_state: Option<P::IterState<EmitRecover>>,
     #[allow(dead_code)]
     phantom: EmptyPhantom<(&'src (), O)>,
 }
@@ -2626,13 +2627,13 @@ where
         let iter_state = match &mut self.iter_state {
             Some(state) => state,
             None => {
-                let state = parser.make_iter::<DoEmit<D>>(&mut inp).ok()?;
+                let state = parser.make_iter(&mut inp).ok()?;
                 self.iter_state = Some(state);
                 self.iter_state.as_mut().unwrap()
             }
         };
 
-        let res = parser.next::<DoEmit<D>>(&mut inp, iter_state, IterParserDebug::new(true));
+        let res = parser.next(&mut inp, iter_state, IterParserDebug::new(true));
         // TODO: Avoid clone
         self.own.start = inp.cursor().inner;
         res.ok().and_then(|res| res)
@@ -2952,7 +2953,7 @@ where
         };
         let out = f(&mut iter);
         let mut inp = iter.own.as_ref_start();
-        let res = end().go::<DoEmit<D>>(&mut inp);
+        let res = end().go::<EmitRecover>(&mut inp);
         let alt = inp.take_alt().map(|alt| alt.err).unwrap_or_else(|| {
             let fake_span = inp.span_since(&inp.cursor());
             // TODO: Why is this needed?

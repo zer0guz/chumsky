@@ -396,11 +396,12 @@ impl<'src> Input<'src> for &'src str {
         if *cursor < this.len() {
             // SAFETY: `cursor < self.len()` above guarantees cursor is in-bounds
             //         We only ever return cursors that are at a character boundary
-            let c = unsafe { this
-                .get_unchecked(*cursor..)
-                .chars()
-                .next()
-                .unwrap_unchecked() };
+            let c = unsafe {
+                this.get_unchecked(*cursor..)
+                    .chars()
+                    .next()
+                    .unwrap_unchecked()
+            };
             *cursor += c.len_utf8();
             Some(c)
         } else {
@@ -694,11 +695,13 @@ where
         (cache, mapper, _): &mut Self::Cache,
         cursor: &mut Self::Cursor,
     ) -> Option<Self::MaybeToken> {
-        unsafe { I::next_maybe(cache, &mut cursor.0).map(|tok| {
-            let (tok, span) = mapper(tok);
-            cursor.1 = Some(span.borrow().end());
-            tok
-        }) }
+        unsafe {
+            I::next_maybe(cache, &mut cursor.0).map(|tok| {
+                let (tok, span) = mapper(tok);
+                cursor.1 = Some(span.borrow().end());
+                tok
+            })
+        }
     }
 
     #[inline]
@@ -734,9 +737,11 @@ where
         (cache, mapper, eoi): &mut Self::Cache,
         range: RangeFrom<&Self::Cursor>,
     ) -> Self::Span {
-        let start = unsafe { I::next_maybe(cache, &mut range.start.0.clone())
-            .map(|tok| mapper(tok).1.borrow().start())
-            .unwrap_or_else(|| eoi.end()) };
+        let start = unsafe {
+            I::next_maybe(cache, &mut range.start.0.clone())
+                .map(|tok| mapper(tok).1.borrow().start())
+                .unwrap_or_else(|| eoi.end())
+        };
         S::new(eoi.context(), start..eoi.end())
     }
 }
@@ -758,11 +763,13 @@ where
         (cache, mapper, _): &mut Self::Cache,
         cursor: &mut Self::Cursor,
     ) -> Option<Self::Token> {
-        unsafe { I::next_maybe(cache, &mut cursor.0).map(|tok| {
-            let (tok, span) = mapper(tok);
-            cursor.1 = Some(span.borrow().end());
-            tok.borrow().clone()
-        }) }
+        unsafe {
+            I::next_maybe(cache, &mut cursor.0).map(|tok| {
+                let (tok, span) = mapper(tok);
+                cursor.1 = Some(span.borrow().end());
+                tok.borrow().clone()
+            })
+        }
     }
 }
 
@@ -785,11 +792,13 @@ where
         (cache, mapper, _): &mut Self::Cache,
         cursor: &mut Self::Cursor,
     ) -> Option<&'src Self::Token> {
-        unsafe { I::next_ref(cache, &mut cursor.0).map(|tok| {
-            let (tok, span) = mapper(tok.into());
-            cursor.1 = Some(span.borrow().end());
-            tok.into()
-        }) }
+        unsafe {
+            I::next_ref(cache, &mut cursor.0).map(|tok| {
+                let (tok, span) = mapper(tok.into());
+                cursor.1 = Some(span.borrow().end());
+                tok.into()
+            })
+        }
     }
 }
 
@@ -902,9 +911,9 @@ where
     F: Fn(I::Span) -> S,
 {
     #[inline(always)]
-    unsafe fn next((cache, _): &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> { unsafe {
-        I::next(cache, cursor)
-    }}
+    unsafe fn next((cache, _): &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
+        unsafe { I::next(cache, cursor) }
+    }
 }
 
 impl<'src, S, I: BorrowInput<'src>, F: 'src> BorrowInput<'src> for MappedSpan<S, I, F>

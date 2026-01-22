@@ -881,12 +881,13 @@ pub mod unicode {
                 //         And the Unicode standard guarantees that any sequence of code
                 //         points is a valid sequence of grapheme clusters, so the
                 //         behaviour of the `next()` function should not change.
-                let c = unsafe { this
-                    .as_str()
-                    .get_unchecked(*cursor..)
-                    .graphemes(true)
-                    .next()
-                    .unwrap_unchecked() };
+                let c = unsafe {
+                    this.as_str()
+                        .get_unchecked(*cursor..)
+                        .graphemes(true)
+                        .next()
+                        .unwrap_unchecked()
+                };
                 *cursor += c.len();
                 Some(Grapheme::new(c))
             } else {
@@ -1164,7 +1165,7 @@ mod tests {
 
     #[test]
     fn whitespace() {
-        use crate::{whitespace, LabelError, TextExpected};
+        use crate::{LabelError, TextExpected, whitespace};
 
         let parser = whitespace::<&str, extra::Err<Rich<_>>>().exactly(1);
 

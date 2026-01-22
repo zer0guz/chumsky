@@ -1,4 +1,4 @@
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 mod utils;
 
@@ -34,9 +34,11 @@ fn bench_cbor(c: &mut Criterion) {
         let cbor = chumsky_zero_copy::cbor();
         move |b| {
             b.iter(|| {
-                assert!(black_box(cbor.check(black_box(CBOR)))
-                    .into_errors()
-                    .is_empty())
+                assert!(
+                    black_box(cbor.check(black_box(CBOR)))
+                        .into_errors()
+                        .is_empty()
+                )
             })
         }
     });
@@ -194,6 +196,7 @@ mod chumsky_zero_copy {
 mod nom {
     use super::CborZero;
     use nom::{
+        IResult,
         bits::{bits, bytes},
         branch::alt,
         bytes::complete::take as take_bytes,
@@ -202,7 +205,6 @@ mod nom {
         multi::count,
         number::complete::{be_f32, be_f64},
         sequence::{pair, preceded},
-        IResult,
     };
 
     fn integer(i: (&[u8], usize)) -> IResult<(&[u8], usize), u64> {
@@ -312,6 +314,7 @@ mod nom {
 mod nom8 {
     use super::CborZero;
     use nom8::{
+        IResult, Parser,
         bits::{
             bits, bytes,
             complete::{tag, take},
@@ -322,7 +325,6 @@ mod nom8 {
         multi::count,
         number::complete::{be_f32, be_f64},
         sequence::{pair, preceded},
-        IResult, Parser,
     };
 
     fn integer(i: (&[u8], usize)) -> IResult<(&[u8], usize), u64> {

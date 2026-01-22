@@ -11,7 +11,7 @@ where
     L: Parser<'src, I, O, E>,
     R: Parser<'src, I, O, E>,
 {
-    fn go<M: crate::private::Mode>(
+    fn go<D: Driver>(
         &self,
         inp: &mut crate::input::InputRef<'src, '_, I, E>,
     ) -> crate::private::PResult<D::Mode, O>
@@ -30,8 +30,8 @@ where
 #[cfg(test)]
 mod tests {
     use crate::{
-        prelude::{any, just},
         IterParser, Parser,
+        prelude::{any, just},
     };
     use either::Either;
 

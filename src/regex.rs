@@ -1,7 +1,7 @@
 //! Implementations of regex-based parsers
 
 use super::*;
-use regex_automata::{meta, Anchored, Input as ReInput};
+use regex_automata::{Anchored, Input as ReInput, meta};
 
 /// See [`regex()`].
 pub struct Regex<I, E> {
@@ -56,8 +56,13 @@ where
             }
             None => {
                 // TODO: Improve error
-                let span = inp.span_since(&before);
-                inp.add_alt([DefaultExpected::SomethingElse], None, span);
+                inp.add_alt_with::<D, _, _>(|inp| {
+                    (
+                        [DefaultExpected::SomethingElse],
+                        None,
+                        inp.span_since(&before),
+                    )
+                });
                 Err(())
             }
         }

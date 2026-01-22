@@ -92,7 +92,6 @@ where
         cursor: &mut Self::Cursor,
     ) -> Option<Self::MaybeToken> {
         unsafe { Self::next(this, cursor) }
-
     }
 
     #[inline(always)]

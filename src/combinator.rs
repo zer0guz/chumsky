@@ -1140,11 +1140,10 @@ where
             hashbrown::hash_map::Entry::Occupied(o) => {
                 if let Some(err) = o.get() {
                     let err = err.clone();
-                    inp.add_alt_err(&before.inner /*&err.pos*/, err.err);
+                    inp.add_alt_err_impl::<D>(&before.inner, err.err);
                 } else {
-                    let err_span = inp.span_since(&before);
                     // TODO: Is this an appropriate way to handle infinite recursion?
-                    inp.add_alt([], None, err_span);
+                    inp.add_alt_with::<D, _, _>(|inp| ([], None, inp.span_since(&before)));
                 }
                 return Err(());
             }
@@ -1368,26 +1367,26 @@ where
     E: ParserExtra<'src, I>,
     // These bounds looks silly, but they basically just ensure that the extra type of the inner parser is compatible with the extra of the outer parser
     E: ParserExtra<
-        'src,
-        J,
-        Error = <E as ParserExtra<'src, I>>::Error,
-        State = <E as ParserExtra<'src, I>>::State,
-        Context = <E as ParserExtra<'src, I>>::Context,
-    >,
+            'src,
+            J,
+            Error = <E as ParserExtra<'src, I>>::Error,
+            State = <E as ParserExtra<'src, I>>::State,
+            Context = <E as ParserExtra<'src, I>>::Context,
+        >,
     <E as ParserExtra<'src, I>>::Error: Error<'src, J>,
     <E as ParserExtra<'src, I>>::State: Inspector<'src, J>,
     B: Parser<'src, I, J, E>,
     J: Input<'src>,
     A: Parser<
-        'src,
-        J,
-        O,
-        extra::Full<
-            <E as ParserExtra<'src, I>>::Error,
-            <E as ParserExtra<'src, I>>::State,
-            <E as ParserExtra<'src, I>>::Context,
+            'src,
+            J,
+            O,
+            extra::Full<
+                <E as ParserExtra<'src, I>>::Error,
+                <E as ParserExtra<'src, I>>::State,
+                <E as ParserExtra<'src, I>>::Context,
+            >,
         >,
-    >,
 {
     #[doc(hidden)]
     #[cfg(feature = "debug")]
@@ -1906,7 +1905,6 @@ where
     }
 
     #[inline(always)]
-    #[allow(clippy::nonminimal_bool)] // TODO: Remove this, lint is currently buggy
     fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, ()> {
         if self.at_most == !0 && self.at_least == 0 {
             loop {
@@ -2689,7 +2687,7 @@ where
     A: IterParser<'src, I, O, E>,
     O: IntoIterator,
 {
-    type IterState<D: Driver> = (A::IterState<D>, Option<M::Output<O::IntoIter>>);
+    type IterState<D: Driver> = (A::IterState<D>, Option<DriverOut<D, O::IntoIter>>);
 
     #[inline(always)]
     fn make_iter<D: Driver>(
@@ -2706,10 +2704,9 @@ where
         (st, iter): &mut Self::IterState<D>,
         debug: IterParserDebug,
     ) -> IPResult<D::Mode, O::Item> {
-        if let Some(item) = iter
-            .as_mut()
-            .and_then(|i| M::get_or(D::Mode::map(M::from_mut(i), |i| i.next()), || None))
-        {
+        if let Some(item) = iter.as_mut().and_then(|i| {
+            D::Mode::get_or(D::Mode::map(D::Mode::from_mut(i), |i| i.next()), || None)
+        }) {
             return Ok(Some(D::Mode::bind(move || item)));
         }
 
@@ -2717,9 +2714,9 @@ where
         loop {
             let before = inp.save();
             match self.parser.next::<D>(inp, st, debug) {
-                Ok(Some(item)) => match M::get_or(
+                Ok(Some(item)) => match D::Mode::get_or(
                     D::Mode::map(
-                        M::from_mut(iter.insert(D::Mode::map(item, |i| i.into_iter()))),
+                        D::Mode::from_mut(iter.insert(D::Mode::map(item, |i| i.into_iter()))),
                         |i| i.next().map(Some),
                     ),
                     || Some(None),

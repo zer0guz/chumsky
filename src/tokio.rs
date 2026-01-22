@@ -81,6 +81,6 @@ impl<'src> SliceInput<'src> for Bytes {
 impl<'src> ValueInput<'src> for Bytes {
     #[inline(always)]
     unsafe fn next(this: &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
-        Self::next_maybe(this, cursor)
+        unsafe { Self::next_maybe(this, cursor) }
     }
 }
