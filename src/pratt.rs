@@ -240,7 +240,7 @@ where
         &self,
         _inp: &mut InputRef<'src, 'parse, I, E>,
         _pre_expr: &input::Cursor<'src, 'parse, I>,
-        _pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        _pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: DriverOut<D, O>,
         _min_power: i32,
     ) -> OperatorResult<DriverOut<D, O>, DriverOut<D, O>>
@@ -256,7 +256,7 @@ where
         &self,
         _inp: &mut InputRef<'src, 'parse, I, E>,
         _pre_expr: &input::Cursor<'src, 'parse, I>,
-        _pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        _pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: DriverOut<D, O>,
         _min_power: i32,
         _f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
@@ -353,7 +353,7 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: DriverOut<D, O>,
         min_power: i32,
     ) -> OperatorResult<DriverOut<D, O>, DriverOut<D, O>>
@@ -368,7 +368,7 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: DriverOut<D, O>,
         min_power: i32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
@@ -568,7 +568,7 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: DriverOut<D, O>,
         min_power: i32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
@@ -765,7 +765,7 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         lhs: DriverOut<D, O>,
         min_power: i32,
     ) -> OperatorResult<DriverOut<D, O>, DriverOut<D, O>>
@@ -836,7 +836,7 @@ macro_rules! impl_operator_for_tuple {
                 &self,
                 inp: &mut InputRef<'src, 'parse, I, E>,
                 pre_expr: &input::Cursor<'src, 'parse, I>,
-                pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+                pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
                 mut lhs: DriverOut<D,O>,
                 min_power: i32,
             ) -> OperatorResult<DriverOut<D,O>, DriverOut<D,O>>
@@ -858,7 +858,7 @@ macro_rules! impl_operator_for_tuple {
                 &self,
                 inp: &mut InputRef<'src, 'parse, I, E>,
                 pre_expr: &input::Cursor<'src, 'parse, I>,
-                pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+                pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
                 mut lhs: DriverOut<D,O>,
                 min_power: i32,
                 f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
@@ -886,7 +886,7 @@ impl_operator_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S
 #[allow(unused_variables, non_snake_case)]
 impl<'src, I, O, E, Op> Operator<'src, I, O, E> for Vec<Op>
 where
-    I: Input,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     Op: Operator<'src, I, O, E>,
 {
@@ -914,7 +914,7 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         mut lhs: DriverOut<D, O>,
         min_power: i32,
     ) -> OperatorResult<DriverOut<D, O>, DriverOut<D, O>>
@@ -935,7 +935,7 @@ where
         &self,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
-        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<'src, I>>::Checkpoint>,
+        pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         mut lhs: DriverOut<D, O>,
         min_power: i32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<D::Mode, O>,
@@ -1033,7 +1033,7 @@ impl<'src, Atom, Ops> Pratt<Atom, Ops> {
 #[allow(unused_variables, non_snake_case)]
 impl<'src, I, O, E, Atom, Ops> Parser<'src, I, O, E> for Pratt<Atom, Ops>
 where
-    I: Input,
+    I: Input + 'src,
     E: ParserExtra<'src, I>,
     Atom: Parser<'src, I, O, E>,
     Ops: Operator<'src, I, O, E>,

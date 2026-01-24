@@ -2373,7 +2373,7 @@ pub trait Parser<'src, I: Input + 'src, O, E: ParserExtra<'src, I> = extra::Defa
     ///
     /// ```
     /// # use chumsky::prelude::*;
-    /// # fn user_Input() -> impl IntoIterator<Item = impl Parser<'src, &'src str, char>> { [just('b'), just('c')] }
+    /// # fn user_input<'src>() -> impl IntoIterator<Item = impl Parser<'src, &'src str, char>> { [just('b'), just('c')] }
     /// let user_input = user_input();
     /// let mut parser = just('a').boxed();
     /// for i in user_input {
@@ -2659,13 +2659,11 @@ where
         let iter_state = match &mut self.iter_state {
             Some(state) => state,
             None => {
-
                 let state = parser.make_iter(&mut inp).ok()?;
                 self.iter_state = Some(state);
                 self.iter_state.as_mut().unwrap()
             }
         };
-
 
         let res = parser.next(&mut inp, iter_state, IterParserDebug::new(true));
         // TODO: Avoid clone

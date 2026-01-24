@@ -113,7 +113,7 @@ pub enum Expr<'src> {
 
 fn parser<'tokens, 'src: 'tokens>() -> impl Parser<
     'tokens,
-    MappedInput<'tokens, Token<'src>, SimpleSpan, &'tokens [Spanned<Token<'src>>]>,
+    MappedInput<&'tokens [Spanned<Token<'src>>],Token<'src>, SimpleSpan>,
     Spanned<Expr<'src>>,
     extra::Err<Rich<'tokens, Token<'src>>>,
 > {

@@ -148,20 +148,24 @@ where
 /// This input type supports rewinding by [`Clone`]-ing the iterator. It is recommended that your iterator is very
 /// cheap to clone. If this is not the case, consider using [`Stream`] instead, which caches generated tokens
 /// internally.
-pub struct IterInput<I,S,T> {
+pub struct IterInput<I, S, T> {
     iter: I,
     eoi: S,
-    _t: EmptyPhantom<T>
+    _t: EmptyPhantom<T>,
 }
 
-impl<I, S,T> IterInput<I, S,T> {
+impl<I, S, T> IterInput<I, S, T> {
     /// Create a new [`IterInput`] with the given iterator, and end of input span.
     pub fn new(iter: I, eoi: S) -> Self {
-        Self { iter, eoi, _t: EmptyPhantom::new() }
+        Self {
+            iter,
+            eoi,
+            _t: EmptyPhantom::new(),
+        }
     }
 }
 
-impl<'src, I,S:Span,T> InputFor<'src> for IterInput<I,S,T>
+impl<'src, I, S: Span, T> InputFor<'src> for IterInput<I, S, T>
 where
     I: Iterator<Item = (T, S)> + Clone,
 {
@@ -174,11 +178,10 @@ where
     type Cache = S; // eoi
 }
 
-impl<I, T, S> Input for IterInput<I, S,T>
+impl<I, T, S> Input for IterInput<I, S, T>
 where
     S: Span,
     I: Iterator<Item = (T, S)> + Clone,
-
 {
     #[inline]
     fn begin<'src>(self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
@@ -226,7 +229,7 @@ where
 //     }
 // }
 
-impl<I, T, S> ValueInput for IterInput<I, S,T>
+impl<I, T, S> ValueInput for IterInput<I, S, T>
 where
     I: Iterator<Item = (T, S)> + Clone,
     S: Span,
@@ -247,7 +250,7 @@ fn map_tuple() {
     }
 
     let stream = Stream::from_iter(core::iter::once(('h', 0..1))).boxed();
-    let stream = stream.map(0..10, |(t, s)| (t, s));
+    let stream = stream.map(0..10, |(t, s), _lt| (t, s));
 
     assert_eq!(parser().parse(stream).into_result(), Ok('h'));
 }

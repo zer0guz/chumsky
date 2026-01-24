@@ -1,8 +1,11 @@
+use crate::input::{CacheOf, CursorOf, InputFor, MaybeTokenOf, SliceInputFor, SliceOf};
+
 use super::*;
 
 use bytes::Bytes;
 
-impl<'src> Input for Bytes {
+
+impl<'src> InputFor<'src> for Bytes {
     type Cursor = usize;
     type Span = SimpleSpan<usize>;
 
@@ -11,21 +14,25 @@ impl<'src> Input for Bytes {
 
     type Cache = Self;
 
+}
+
+impl Input for Bytes {
+  
     #[inline]
-    fn begin(self) -> (Self::Cursor, Self::Cache) {
+    fn begin<'src>(self) -> (CursorOf<'src,Self>, CacheOf<'src,Self>) {
         (0, self)
     }
 
     #[inline]
-    fn cursor_location(cursor: &Self::Cursor) -> usize {
+    fn cursor_location<'src>(cursor: &CursorOf<'src,Self>) -> usize {
         *cursor
     }
 
     #[inline(always)]
-    unsafe fn next_maybe(
-        this: &mut Self::Cache,
-        cursor: &mut Self::Cursor,
-    ) -> Option<Self::MaybeToken> {
+    unsafe fn next_maybe<'src>(
+        this: &mut CacheOf<'src,Self>,
+        cursor: &mut CursorOf<'src,Self>,
+    ) -> Option<MaybeTokenOf<'src,Self>> {
         if let Some(tok) = this.get(*cursor) {
             *cursor += 1;
             Some(*tok)
@@ -35,22 +42,27 @@ impl<'src> Input for Bytes {
     }
 
     #[inline(always)]
-    unsafe fn span(_this: &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Span {
+    unsafe fn span<'src>(_this: &mut CacheOf<'src,Self>, range: Range<&CursorOf<'src,Self>>) -> SpanOf<'src,Self> {
         (*range.start..*range.end).into()
     }
 }
 
-impl<'src> ExactSizeInput for Bytes {
+impl ExactSizeInput for Bytes {
     #[inline(always)]
-    unsafe fn span_from(this: &mut Self::Cache, range: RangeFrom<&Self::Cursor>) -> Self::Span {
+    unsafe fn span_from<'src>(this: &mut CacheOf<'src,Self>, range: RangeFrom<&CursorOf<'src,Self>>) -> SpanOf<'src,Self> {
         (*range.start..this.len()).into()
     }
+}
+
+
+impl<'src> SliceInputFor<'src> for Bytes {
+    type Slice = Bytes;
 }
 
 impl Sealed for Bytes {}
 impl<'src> StrInput for Bytes {
     #[doc(hidden)]
-    fn stringify(slice: Self::Slice) -> String {
+    fn stringify(slice: SliceOf<'src,Self>) -> String {
         slice
             .iter()
             // .map(|e| core::ascii::Char::from_u8(e).unwrap_or(AsciiChar::Substitute).to_char())
@@ -59,28 +71,27 @@ impl<'src> StrInput for Bytes {
     }
 }
 
-impl<'src> SliceInput for Bytes {
-    type Slice = Bytes;
+impl SliceInput for Bytes {
 
     #[inline(always)]
-    fn full_slice(this: &mut Self::Cache) -> Self::Slice {
+    fn full_slice<'src>(this: &mut CacheOf<'src,Self>) -> SliceOf<'src,Self> {
         this.clone()
     }
 
     #[inline(always)]
-    unsafe fn slice(this: &mut Self::Cache, range: Range<&Self::Cursor>) -> Self::Slice {
+    unsafe fn slice<'src>(this: &mut CacheOf<'src,Self>, range: Range<&CursorOf<'src,Self>>) -> SliceOf<'src,Self> {
         this.slice(*range.start..*range.end)
     }
 
     #[inline(always)]
-    unsafe fn slice_from(this: &mut Self::Cache, from: RangeFrom<&Self::Cursor>) -> Self::Slice {
+    unsafe fn slice_from<'src>(this: &mut CacheOf<'src,Self>, from: RangeFrom<&CursorOf<'src,Self>>) -> SliceOf<'src,Self> {
         this.slice(*from.start..)
     }
 }
 
-impl<'src> ValueInput for Bytes {
+impl ValueInput for Bytes {
     #[inline(always)]
-    unsafe fn next(this: &mut Self::Cache, cursor: &mut Self::Cursor) -> Option<Self::Token> {
+    unsafe fn next<'src>(this: &mut CacheOf<'src,Self>, cursor: &mut CursorOf<'src,Self>) -> Option<TokenOf<'src,Self>> {
         unsafe { Self::next_maybe(this, cursor) }
     }
 }

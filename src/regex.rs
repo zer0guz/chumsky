@@ -1,5 +1,7 @@
 //! Implementations of regex-based parsers
 
+use crate::input::SliceInputFor;
+
 use super::*;
 use regex_automata::{Anchored, Input as ReInput, meta};
 
@@ -29,9 +31,9 @@ pub fn regex<I, E>(pattern: &str) -> Regex<I, E> {
 
 impl<'src, S, I, E> Parser<'src, I, &'src S, E> for Regex<I, E>
 where
-    I: StrInput<'src, Slice = &'src S>,
-    I::Token: Char,
-    S: ?Sized + AsRef<[u8]> + 'src,
+    I: for<'any> SliceInputFor<'any, Slice = &'any S> + StrInput + 'src,
+    for<'any> TokenOf<'any, I>: Char,
+    S: ?Sized + AsRef<[u8]>,
     E: ParserExtra<'src, I>,
 {
     #[inline]
@@ -83,8 +85,8 @@ mod tests {
         fn parser<'src, S, I>() -> impl Parser<'src, I, Vec<&'src S>>
         where
             S: ?Sized + AsRef<[u8]> + 'src,
-            I: StrInput<'src, Slice = &'src S>,
-            I::Token: Char,
+            I: for<'any> SliceInputFor<'any, Slice = &'any S> + StrInput + 'src,
+            for<'any> TokenOf<'any, I>: Char,
         {
             regex("[a-zA-Z_][a-zA-Z0-9_]*")
                 .padded()
@@ -97,9 +99,7 @@ mod tests {
         );
 
         assert_eq!(
-            parser()
-                .parse(b"hello world this works" as &[_])
-                .into_result(),
+            parser().parse(b"hello world this works").into_result(),
             Ok(vec![
                 b"hello" as &[_],
                 b"world" as &[_],

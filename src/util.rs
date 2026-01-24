@@ -16,6 +16,35 @@ impl<'r, T: ?Sized> Ref<'r, T> {
         // so the pointer is valid for `'r`.
         unsafe { self.ptr.as_ref() }
     }
+
+    #[inline(always)]
+    pub fn as_ptr(self) -> *const T {
+        self.ptr.as_ptr()
+    }
+
+    #[inline(always)]
+    pub unsafe fn from_ptr(ptr: *const T) -> Self {
+        Self {
+            ptr: unsafe { core::ptr::NonNull::new_unchecked(ptr as *mut T) },
+            _lt: core::marker::PhantomData,
+        }
+    }
+}
+impl<'src, T, S> Ref<'src, (T, S)> {
+    #[inline(always)]
+    pub fn split(self) -> (Ref<'src, T>, Ref<'src, S>) {
+        unsafe {
+            let base = self.as_ptr();
+            (
+                Ref::from_ptr(core::ptr::addr_of!((*base).0)),
+                Ref::from_ptr(core::ptr::addr_of!((*base).1)),
+            )
+        }
+    }
+}
+
+pub fn split_ref<'src,'map, T, S>(r: Ref<'src, (T, S)>,lt: &'map()) -> (Ref<'src, T>, Ref<'src, S>) {
+    r.split()
 }
 
 impl<'r, T: ?Sized> Borrow<T> for Ref<'r, T> {
@@ -243,27 +272,35 @@ impl<T: Serialize, R: Deref<Target = T>> Serialize for Maybe<'_, T, R> {
         serializer.serialize_newtype_struct("Maybe", &**self)
     }
 }
-
 #[cfg(feature = "serde")]
-impl<'de, T: Deserialize<'de>, R: Deref<Target = T>> Deserialize<'de> for Maybe<'de, T, R> {
+impl<'de, 'r, T, R> Deserialize<'de> for Maybe<'r, T, R>
+where
+    T: Deserialize<'de>,
+    R: Deref<Target = T>,
+{
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
     {
-        struct MaybeVisitor<T, R>(PhantomData<(T, R)>);
+        struct MaybeVisitor<'r, T, R>(PhantomData<(&'r (), T, R)>);
 
-        impl<'de2, T: Deserialize<'de2>, R: Deref<Target = T>> Visitor<'de2> for MaybeVisitor<T, R> {
-            type Value = Maybe<'de2, T, R>;
+        impl<'de2, 'r, T, R> Visitor<'de2> for MaybeVisitor<'r, T, R>
+        where
+            T: Deserialize<'de2>,
+            R: Deref<Target = T>,
+        {
+            type Value = Maybe<'r, T, R>;
 
-            fn expecting(&self, formatter: &mut fmt::Formatter) -> fmt::Result {
-                write!(formatter, "a Maybe")
+            fn expecting(&self, f: &mut fmt::Formatter) -> fmt::Result {
+                write!(f, "a Maybe")
             }
 
-            fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+            fn visit_newtype_struct<D>(self, d: D) -> Result<Self::Value, D::Error>
             where
                 D: Deserializer<'de2>,
             {
-                T::deserialize(deserializer).map(Maybe::Val)
+                // Always deserialize as owned.
+                T::deserialize(d).map(Maybe::Val)
             }
         }
 
