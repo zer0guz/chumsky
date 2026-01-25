@@ -249,8 +249,8 @@ fn map_tuple() {
         just('h')
     }
 
-    let stream = Stream::from_iter(core::iter::once(('h', 0..1))).boxed();
-    let stream = stream.map(0..10, |(t, s), _lt| (t, s));
+    let stream: Stream<Box<dyn Iterator<Item = (char, Range<i32>)>>> = Stream::from_iter(core::iter::once(('h', 0..1))).boxed();
+    let stream = stream.split_token_span(0..10);
 
     assert_eq!(parser().parse(stream).into_result(), Ok('h'));
 }

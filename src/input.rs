@@ -204,10 +204,10 @@ pub trait Input: for<'src> InputFor<'src> {
     // ///
     // /// Although `MappedInput` does implement [`SliceInput`], please be aware that, as you might anticipate, the slices
     // /// will be those of the original input and not `&[T]`, to avoid the need to copy around sections of the input.
-    fn map<'map,T, S: Span, F>(self, eoi: S, f: F) -> MappedInput<Self, T, S, F>
+    fn map<T, S: Span, F>(self, eoi: S, f: F) -> MappedInput<Self, T, S, F>
     where
         Self: Sized,
-        F: for<'any> InputMapper<'any,'map, MaybeTokenOf<'any, Self>, T, S>,
+        F: for<'any> InputMapper<'any, MaybeTokenOf<'any, Self>, T, S>,
     {
         MappedInput {
             input: self,
@@ -253,27 +253,30 @@ pub trait Input: for<'src> InputFor<'src> {
     ///
     /// assert_eq!(eval().parse(example[..].split_token_span((0..4).into())).into_result(), Ok(6));
     /// ```
-    fn split_token_span<T, S>(self, eoi: S) -> impl Input
+    fn split_token_span<T, S>(self, eoi: S) -> MappedInput<Self, T, S>
     where
-        Self: for<'src> InputFor<'src, Token = (T, S), MaybeToken = Ref<'src ,(T, S)>> + Sized,
+        Self: for<'src> InputFor<'src, Token = (T, S)> + Sized,
+        for<'src> MaybeTokenOf<'src, Self>: IntoMaybe<'src, (T, S)>,
         S: Span + Clone,
     {
-        self.map(eoi, util::split_ref::<T, S>)
+        todo!()
+        //self.map(eoi, util::split_ref::<T, S>)
     }
 
-    // /// Take an input (such as a slice) with token type `T` where  `T` is a spanned type, and split it into its inner value and token.
-    // ///
-    // /// See the documentation for [`Input::split_token_span`], which is nearly identical in concept.
-    // fn split_spanned<'src, T, S>(self, eoi: S) -> impl Input
-    // where
-    //     Self: Input<Token = S::Spanned, MaybeToken = &'src S::Spanned> + Sized,
-    //     S: WrappingSpan<T>,
-    //     <S as span::WrappingSpan<T>>::Spanned: 'src,
-    // {
-    //     self.map(eoi, |spanned, lt| {
-    //         (S::inner_of(spanned), S::span_of(spanned))
-    //     })
-    // }
+    /// Take an input (such as a slice) with token type `T` where  `T` is a spanned type, and split it into its inner value and token.
+    ///
+    /// See the documentation for [`Input::split_token_span`], which is nearly identical in concept.
+    fn split_spanned<T, S>(self, eoi: S) -> MappedInput<Self, T, S>
+    where
+        Self: Input<Token = S::Spanned> + Sized,
+        for<'src> MaybeTokenOf<'src, Self>: IntoMaybe<'src, S::Spanned>,
+        S: WrappingSpan<T>,
+    {
+        todo!()
+        // self.map(eoi, |spanned, lt| {
+        //     (S::inner_of(spanned), S::span_of(spanned))
+        // })
+    }
 
     /// Map the spans output for this input to a different output span.
     ///
@@ -719,23 +722,23 @@ impl<T, const N: usize> BorrowInput for &[T; N] {
     }
 }
 
-pub trait InputMapper<'src,'map, MaybeToken, OutTok, OutSpan>:
+pub trait InputMapper<'src, MaybeToken, OutTok, OutSpan>:
     Fn(
         MaybeToken,
-        &'map (),
+        &'src (),
     ) -> (
-        <Self as InputMapper<'src,'map, MaybeToken, OutTok, OutSpan>>::OutputToken,
-        <Self as InputMapper<'src, 'map,MaybeToken, OutTok, OutSpan>>::OutputSpan,
+        <Self as InputMapper<'src, MaybeToken, OutTok, OutSpan>>::OutputToken,
+        <Self as InputMapper<'src, MaybeToken, OutTok, OutSpan>>::OutputSpan,
     ) + Sized
 {
     type OutputToken;
     type OutputSpan;
 }
 
-impl<'src,'map, F, MaybeToken, OutTok, OutSpan, OT, OS> InputMapper<'src, 'map,MaybeToken, OutTok, OutSpan>
+impl<'src, F, MaybeToken, OutTok, OutSpan, OT, OS> InputMapper<'src, MaybeToken, OutTok, OutSpan>
     for F
 where
-    F:  Fn(MaybeToken, &'map ()) -> (OT, OS),
+    F: Fn(MaybeToken, &'src ()) -> (OT, OS),
 {
     type OutputToken = OT;
     type OutputSpan = OS;
@@ -761,10 +764,10 @@ pub struct MappedInput<
     _tok: EmptyPhantom<T>,
 }
 
-impl<'src, 'map, I, M, T, S: Span> InputFor<'src> for MappedInput<I, T, S, M>
+impl<'src, I, M, T, S: Span> InputFor<'src> for MappedInput<I, T, S, M>
 where
     I: Input,
-    M: for<'any> InputMapper<'any,'map, MaybeTokenOf<'any, I>, T, S>,
+    M: for<'any> InputMapper<'any, MaybeTokenOf<'any, I>, T, S>,
 {
     type Span = S;
 
@@ -776,12 +779,11 @@ where
     type Cache = (CacheOf<'src, I>, M, S);
 }
 
-impl<'map, I, T, S, F> Input for MappedInput<I, T, S, F>
+impl<I, T, S, F> Input for MappedInput<I, T, S, F>
 where
     I: Input,
     F: for<'any> InputMapper<
             'any,
-            'map,
             MaybeTokenOf<'any, I>,
             T,
             S,
@@ -830,13 +832,12 @@ where
     }
 }
 
-impl<'map, T, S, I, M> ExactSizeInput for MappedInput<I, T, S, M>
+impl<T, S, I, M> ExactSizeInput for MappedInput<I, T, S, M>
 where
     I: ExactSizeInput,
     S: Span + Clone,
     M: for<'src> InputMapper<
             'src,
-            'map,
             MaybeTokenOf<'src, I>,
             T,
             S,
@@ -858,13 +859,12 @@ where
     }
 }
 
-impl<'map, T, S, I, M> ValueInput for MappedInput<I, T, S, M>
+impl<T, S, I, M> ValueInput for MappedInput<I, T, S, M>
 where
     I: ValueInput,
     S: Span + Clone,
     M: for<'src> InputMapper<
             'src,
-            'map,
             MaybeTokenOf<'src, I>,
             T,
             S,
@@ -889,15 +889,14 @@ where
     }
 }
 
-impl<'map, T, S, I, M> BorrowInput for MappedInput<I, T, S, M>
+impl<T, S, I, M> BorrowInput for MappedInput<I, T, S, M>
 where
     I: Input + BorrowInput,
-    for<'src> MaybeTokenOf<'src, I>: From<&'src TokenOf<'src, I>>,
-    for<'src> MaybeTokenOf<'src, Self>: Into<&'src TokenOf<'src, Self>>,
+    for<'src> MaybeTokenOf<'src, I>: From<Ref<'src, TokenOf<'src, I>>>,
+    for<'src> MaybeTokenOf<'src, Self>: Into<Ref<'src, TokenOf<'src, Self>>>,
     S: Span + Clone,
     M: for<'src> InputMapper<
             'src,
-            'map,
             MaybeTokenOf<'src, I>,
             T,
             S,
@@ -912,29 +911,28 @@ where
     ) -> Option<&'src TokenOf<'src, Self>> {
         unsafe {
             I::next_ref(cache, &mut cursor.0).map(|tok| {
-                let (tok, span) = mapper(tok.into(), &());
+                let (tok, span) = mapper(Ref::from(tok).into(), &());
                 cursor.1 = Some(span.borrow().end());
-                tok.into()
+                tok.into().into_ref()
             })
         }
     }
 }
-impl<'src, 'map, T, S, I, M> SliceInputFor<'src> for MappedInput<I, T, S, M>
+impl<'src, T, S, I, M> SliceInputFor<'src> for MappedInput<I, T, S, M>
 where
     S: Span,
     I: SliceInput,
-    M: for<'any> InputMapper<'any,'map, MaybeTokenOf<'any, I>, T, S>,
+    M: for<'any> InputMapper<'any, MaybeTokenOf<'any, I>, T, S>,
 {
     type Slice = SliceOf<'src, I>;
 }
 
-impl<'map, T, S, I, M> SliceInput for MappedInput<I, T, S, M>
+impl<T, S, I, M> SliceInput for MappedInput<I, T, S, M>
 where
     I: Input + SliceInput<Token = (T, S)>,
     S: Span + Clone,
     M: for<'src> InputMapper<
             'src,
-            'map,
             MaybeTokenOf<'src, I>,
             T,
             S,

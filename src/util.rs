@@ -263,6 +263,8 @@ where
     }
 }
 
+
+
 #[cfg(feature = "serde")]
 impl<T: Serialize, R: Deref<Target = T>> Serialize for Maybe<'_, T, R> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
