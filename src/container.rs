@@ -6,227 +6,249 @@ use core::hash::BuildHasher;
 use hashbrown::HashSet;
 
 /// A utility trait for types that can be constructed from a series of items.
-pub trait Container<T>: Default {
+pub trait Container {
+    type With<T>: Default;
     /// Create a container, attempting to pre-allocate enough space for `n` items.
     ///
     /// Failure to do so is not a problem, the size is only a hint.
-    fn with_capacity(n: usize) -> Self {
+    fn with_capacity<T>(n: usize) -> Self::With<T> {
         let _ = n;
-        Self::default()
+        Self::With::<T>::default()
     }
     /// Add a value to the end of this container.
-    fn push(&mut self, item: T);
+    fn push<T>(c: &mut Self::With<T>, item: T);
 }
 
-impl<T, C> Container<T> for Box<C>
+impl<C> Container for Box<C>
 where
-    C: Container<T>,
+    C: Container,
 {
-    fn with_capacity(n: usize) -> Self {
+    type With<T> = Box<C::With<T>>;
+
+    fn with_capacity<T>(n: usize) -> Self::With<T> {
         Box::new(C::with_capacity(n))
     }
 
-    fn push(&mut self, item: T) {
-        C::push(self, item)
+    fn push<T>(c: &mut Self::With<T>, item: T) {
+        C::push::<T>(&mut **c, item)
     }
 }
 
-impl<T, C> Container<T> for Cell<C>
+impl<C> Container for Cell<C>
 where
-    C: Container<T>,
+    C: Container,
 {
-    fn with_capacity(n: usize) -> Self {
+    type With<T> = Cell<C::With<T>>;
+
+    fn with_capacity<T>(n: usize) -> Self::With<T> {
         Cell::new(C::with_capacity(n))
     }
 
-    fn push(&mut self, item: T) {
-        self.get_mut().push(item)
+    fn push<T>(c: &mut Self::With<T>, item: T) {
+        C::push(c.get_mut(), item)
     }
 }
 
-impl<T, C> Container<T> for RefCell<C>
+impl<C> Container for RefCell<C>
 where
-    C: Container<T>,
+    C: Container,
 {
-    fn with_capacity(n: usize) -> Self {
+    type With<T> = RefCell<C::With<T>>;
+
+    fn with_capacity<T>(n: usize) -> Self::With<T> {
         RefCell::new(C::with_capacity(n))
     }
 
-    fn push(&mut self, item: T) {
-        self.get_mut().push(item)
+    fn push<T>(c: &mut Self::With<T>, item: T) {
+        C::push(c.get_mut(), item)
     }
 }
 
-impl<T> Container<T> for () {
-    fn push(&mut self, _: T) {}
+impl Container for () {
+    type With<T> = ();
+
+    fn push<T>(_: &mut Self::With<T>, _: T) {}
 }
 
 /// A collection that counts items instead of containing them.
-impl<T> Container<T> for usize {
-    fn push(&mut self, _: T) {
-        *self += 1;
+impl Container for usize {
+    type With<T> = usize;
+
+    fn push<T>(c: &mut Self::With<T>, _: T) {
+        *c += 1;
     }
 }
 
-impl<T> Container<T> for Vec<T> {
-    fn with_capacity(n: usize) -> Self {
-        Self::with_capacity(n)
+impl Container for Vec<()> {
+    type With<T> = Vec<T>;
+
+    fn with_capacity<T>(n: usize) -> Self::With<T> {
+        Vec::with_capacity(n)
     }
-    fn push(&mut self, item: T) {
-        (*self).push(item);
+    
+    fn push<T>(c: &mut Self::With<T>, item: T) {
+        Vec::push(c, item);
     }
 }
 
-impl<T> Container<T> for LinkedList<T> {
-    fn push(&mut self, item: T) {
-        (*self).push_back(item);
+impl Container for LinkedList<()> {
+    type With<T> = LinkedList<T>;
+
+    fn push<T>(c: &mut Self::With<T>, item: T) {
+        LinkedList::push_back(c,item);
     }
 }
 
-impl Container<char> for String {
-    fn with_capacity(n: usize) -> Self {
-        // Note: we're assuming that most characters are going to be ASCII, and hence only require one byte to store.
-        Self::with_capacity(n)
-    }
-    fn push(&mut self, item: char) {
-        (*self).push(item)
-    }
-}
+// impl Container<char> for String {
+//     fn with_capacity(n: usize) -> Self {
+//         // Note: we're assuming that most characters are going to be ASCII, and hence only require one byte to store.
+//         Self::with_capacity(n)
+//     }
+//     fn push(&mut self, item: char) {
+//         (*self).push(item)
+//     }
+// }
 
-impl<K: Eq + Hash, V, S: Default + BuildHasher> Container<(K, V)> for HashMap<K, V, S> {
-    fn with_capacity(n: usize) -> Self {
-        Self::with_capacity_and_hasher(n, Default::default())
-    }
-    fn push(&mut self, (key, value): (K, V)) {
-        (*self).insert(key, value);
-    }
-}
+// impl<K: Eq + Hash, V, S: Default + BuildHasher> Container<(K, V)> for HashMap<K, V, S> {
+//     fn with_capacity(n: usize) -> Self {
+//         Self::with_capacity_and_hasher(n, Default::default())
+//     }
+//     fn push(&mut self, (key, value): (K, V)) {
+//         (*self).insert(key, value);
+//     }
+// }
 
-#[cfg(feature = "std")]
-impl<K: Eq + Hash, V, S: Default + BuildHasher> Container<(K, V)>
-    for std::collections::HashMap<K, V, S>
-{
-    fn with_capacity(n: usize) -> Self {
-        Self::with_capacity_and_hasher(n, Default::default())
-    }
-    fn push(&mut self, (key, value): (K, V)) {
-        (*self).insert(key, value);
-    }
-}
+// #[cfg(feature = "std")]
+// impl<K: Eq + Hash, V, S: Default + BuildHasher> Container<(K, V)>
+//     for std::collections::HashMap<K, V, S>
+// {
+//     fn with_capacity(n: usize) -> Self {
+//         Self::with_capacity_and_hasher(n, Default::default())
+//     }
+//     fn push(&mut self, (key, value): (K, V)) {
+//         (*self).insert(key, value);
+//     }
+// }
 
-impl<T: Eq + Hash, S: Default + BuildHasher> Container<T> for HashSet<T, S> {
-    fn with_capacity(n: usize) -> Self {
-        Self::with_capacity_and_hasher(n, Default::default())
-    }
-    fn push(&mut self, item: T) {
-        (*self).insert(item);
-    }
-}
+// impl<T: Eq + Hash, S: Default + BuildHasher> Container<T> for HashSet<T, S> {
+//     fn with_capacity(n: usize) -> Self {
+//         Self::with_capacity_and_hasher(n, Default::default())
+//     }
+//     fn push(&mut self, item: T) {
+//         (*self).insert(item);
+//     }
+// }
 
-#[cfg(feature = "std")]
-impl<T: Eq + Hash, S: Default + BuildHasher> Container<T> for std::collections::HashSet<T, S> {
-    fn with_capacity(n: usize) -> Self {
-        Self::with_capacity_and_hasher(n, Default::default())
-    }
-    fn push(&mut self, item: T) {
-        (*self).insert(item);
-    }
-}
+// #[cfg(feature = "std")]
+// impl<T: Eq + Hash, S: Default + BuildHasher> Container<T> for std::collections::HashSet<T, S> {
+//     fn with_capacity(n: usize) -> Self {
+//         Self::with_capacity_and_hasher(n, Default::default())
+//     }
+//     fn push(&mut self, item: T) {
+//         (*self).insert(item);
+//     }
+// }
 
-#[cfg(feature = "std")]
-impl<T> Container<T> for std::collections::VecDeque<T> {
-    fn with_capacity(n: usize) -> Self {
-        Self::with_capacity(n)
-    }
-    fn push(&mut self, item: T) {
-        self.push_back(item);
-    }
-}
+// #[cfg(feature = "std")]
+// impl<T> Container<T> for std::collections::VecDeque<T> {
+//     fn with_capacity(n: usize) -> Self {
+//         Self::with_capacity(n)
+//     }
+//     fn push(&mut self, item: T) {
+//         self.push_back(item);
+//     }
+// }
 
-impl<K: Ord, V> Container<(K, V)> for alloc::collections::BTreeMap<K, V> {
-    fn push(&mut self, (key, value): (K, V)) {
-        (*self).insert(key, value);
-    }
-}
+// impl<K: Ord, V> Container<(K, V)> for alloc::collections::BTreeMap<K, V> {
+//     fn push(&mut self, (key, value): (K, V)) {
+//         (*self).insert(key, value);
+//     }
+// }
 
-impl<T: Ord> Container<T> for alloc::collections::BTreeSet<T> {
-    fn push(&mut self, item: T) {
-        (*self).insert(item);
-    }
-}
+// impl<T: Ord> Container<T> for alloc::collections::BTreeSet<T> {
+//     fn push(&mut self, item: T) {
+//         (*self).insert(item);
+//     }
+// }
 
 /// A utility trait for types that hold a specific constant number of output values.
 ///
 /// # Safety
 ///
 /// This trait requires that [`Uninit`](ContainerExactly::Uninit) be sound to reinterpret as `Self`
-pub unsafe trait ContainerExactly<T> {
+pub unsafe trait ContainerExactly {
     /// The length of this container
     const LEN: usize;
 
+    type With<T>;
+
     /// An uninitialized value of this container.
-    type Uninit;
+    type Uninit<T>;
 
     /// Get an uninitialized form of this container.
-    fn uninit() -> Self::Uninit;
+    fn uninit<T>() -> Self::Uninit<T>;
 
     /// Write a value to a position in an uninitialized container.
-    fn write(uninit: &mut Self::Uninit, i: usize, item: T);
+    fn write<T>(uninit: &mut Self::Uninit<T>, i: usize, item: T);
 
     /// Drop all values before a provided index in this container.
     ///
     /// # Safety
     ///
     /// All values up to the provided index must be initialized.
-    unsafe fn drop_before(uninit: &mut Self::Uninit, i: usize);
+    unsafe fn drop_before<T>(uninit: &mut Self::Uninit<T>, i: usize);
 
     /// Convert this container into its initialized form.
     ///
     /// # Safety
     ///
     /// All values in the container must be initialized.
-    unsafe fn take(uninit: Self::Uninit) -> Self;
+    unsafe fn take<T>(uninit: Self::Uninit<T>) -> Self::With<T>;
 }
 
 // SAFETY: `[MaybeUninit<T>; N]` has the same layout as `[T; N]`
-unsafe impl<T, const N: usize> ContainerExactly<T> for [T; N] {
+unsafe impl<const N: usize> ContainerExactly for [(); N] {
     const LEN: usize = N;
 
-    type Uninit = [MaybeUninit<T>; N];
-    fn uninit() -> Self::Uninit {
+    type With<T> = [T; N];
+    type Uninit<T> = [MaybeUninit<T>; N];
+    fn uninit<T>() -> Self::Uninit<T> {
         MaybeUninitExt::uninit_array()
     }
-    fn write(uninit: &mut Self::Uninit, i: usize, item: T) {
+
+    fn write<T>(uninit: &mut Self::Uninit<T>, i: usize, item: T) {
         uninit[i].write(item);
     }
-    unsafe fn drop_before(uninit: &mut Self::Uninit, i: usize) {
+    unsafe fn drop_before<T>(uninit: &mut Self::Uninit<T>, i: usize) {
         uninit[..i]
             .iter_mut()
             .for_each(|o| unsafe { o.assume_init_drop() });
     }
-    unsafe fn take(uninit: Self::Uninit) -> Self {
+    unsafe fn take<T>(uninit: Self::Uninit<T>) -> Self::With<T> {
         unsafe { MaybeUninitExt::array_assume_init(uninit) }
     }
 }
 
 // Safety: `Box<C::Uninit>` is sound to reinterpret assuming the inner `C` implements this trait soundly
-unsafe impl<T, C> ContainerExactly<T> for Box<C>
+unsafe impl<C> ContainerExactly for Box<C>
 where
-    C: ContainerExactly<T>,
+    C: ContainerExactly,
 {
     const LEN: usize = C::LEN;
-    type Uninit = Box<C::Uninit>;
-    fn uninit() -> Self::Uninit {
+    type With<T> = Box<C::With<T>>;
+    type Uninit<T> = Box<C::Uninit<T>>;
+    fn uninit<T>() -> Self::Uninit<T> {
         Box::new(C::uninit())
     }
-    fn write(uninit: &mut Self::Uninit, i: usize, item: T) {
+    fn write<T>(uninit: &mut Self::Uninit<T>, i: usize, item: T) {
         C::write(&mut *uninit, i, item)
     }
-    unsafe fn drop_before(uninit: &mut Self::Uninit, i: usize) {
+    unsafe fn drop_before<T>(uninit: &mut Self::Uninit<T>, i: usize) {
         unsafe { C::drop_before(&mut *uninit, i) }
     }
-    unsafe fn take(uninit: Self::Uninit) -> Self {
-        unsafe { Box::from_raw(Box::into_raw(uninit) as *mut C) }
+    unsafe fn take<T>(uninit: Self::Uninit<T>) -> Self::With<T> {
+        // SAFETY: ContainerExactly contract promises `C::Uninit<T>` is layout-compatible with `C::With<T>`.
+        unsafe { Box::from_raw(Box::into_raw(uninit) as *mut C::With<T>) }
     }
 }
 
@@ -962,29 +984,29 @@ impl<'p> OrderedSeq<'p, &'p Grapheme> for &'p Graphemes {}
 mod test {
     use super::*;
 
-    fn init_container<C: ContainerExactly<usize>>() -> C {
-        let mut uninit = C::uninit();
+    fn init_container<C: ContainerExactly>() -> C::With<usize> {
+        let mut uninit = C::uninit::<usize>();
         for idx in 0..C::LEN {
-            C::write(&mut uninit, idx, idx);
+            C::write::<usize>(&mut uninit, idx, idx);
         }
         // SAFETY: All elements were initialized.
-        unsafe { C::take(uninit) }
+        unsafe { C::take::<usize>(uninit) }
     }
 
-    fn drop_container<C: ContainerExactly<usize>>() {
-        let mut uninit = C::uninit();
+    fn drop_container<C: ContainerExactly>() {
+        let mut uninit = C::uninit::<usize>();
         for idx in 0..(C::LEN / 2) {
-            C::write(&mut uninit, idx, idx);
+            C::write::<usize>(&mut uninit, idx, idx);
         }
         // SAFETY: All elements up to this point were initialized.
-        unsafe { C::drop_before(&mut uninit, C::LEN / 2) };
+        unsafe { C::drop_before::<usize>(&mut uninit, C::LEN / 2) };
     }
 
     #[test]
     fn exact_array() {
-        let c = init_container::<[usize; 4]>();
+        let c = init_container::<[(); 4]>();
         assert_eq!(&c, &[0, 1, 2, 3]);
-        drop_container::<[usize; 4]>();
+        drop_container::<[(); 4]>();
     }
 
     // #[test]

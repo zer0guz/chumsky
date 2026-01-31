@@ -1,11 +1,11 @@
 //! Items related to parser labelling.
 
-use crate::input::{SpanOf, TokenOf};
+use crate::extra::ErrOfEx;
 
 use super::*;
 
 /// A trait implemented by [`Error`]s that can originate from labelled parsers. See [`Parser::labelled`].
-pub trait LabelError<'src, I: Input, L>: Sized {
+pub trait LabelError<'src, T,S, L>: Sized {
     /// Create a new error describing a conflict between expected inputs and that which was actually found.
     ///
     /// `found` having the value `None` indicates that the end of input was reached, but was not expected.
@@ -13,20 +13,27 @@ pub trait LabelError<'src, I: Input, L>: Sized {
     /// An expected input having the value `None` indicates that the end of input was expected.
     fn expected_found<E: IntoIterator<Item = L>>(
         expected: E,
-        found: Option<MaybeRef<'src, TokenOf<'src, I>>>,
-        span: SpanOf<'src, I>,
+        found: Option<MaybeRef<'src, T>>,
+        span: S,
     ) -> Self;
+
+
+    /// Merge two errors that point to the same input together, combining their information.
+    #[inline(always)]
+    fn merge(self, other: Self) -> Self {
+        let _ = other;
+        self
+    }
+
 
     /// Fast path for `a.merge(LabelError::expected_found(...))` that may incur less overhead by, for example, reusing allocations.
     #[inline(always)]
     fn merge_expected_found<E: IntoIterator<Item = L>>(
         self,
         expected: E,
-        found: Option<MaybeRef<'src, TokenOf<'src, I>>>,
-        span: SpanOf<'src, I>,
+        found: Option<MaybeRef<'src, T>>,
+        span: S,
     ) -> Self
-    where
-        Self: Error<'src, I>,
     {
         self.merge(LabelError::expected_found(expected, found, span))
     }
@@ -36,8 +43,8 @@ pub trait LabelError<'src, I: Input, L>: Sized {
     fn replace_expected_found<E: IntoIterator<Item = L>>(
         self,
         expected: E,
-        found: Option<MaybeRef<'src, TokenOf<'src, I>>>,
-        span: SpanOf<'src, I>,
+        found: Option<MaybeRef<'src, T>>,
+        span: S,
     ) -> Self {
         LabelError::expected_found(expected, found, span)
     }
@@ -55,7 +62,7 @@ pub trait LabelError<'src, I: Input, L>: Sized {
     /// A span that runs from the beginning of the context up until the error location is also provided.
     ///
     /// In practice, this usually means adding the context to a context 'stack', similar to a backtrace.
-    fn in_context(&mut self, label: L, span: SpanOf<'src, I>) {
+    fn in_context(&mut self, label: L, span:S) {
         #![allow(unused_variables)]
     }
 }
@@ -86,13 +93,14 @@ impl<A, L> Labelled<A, L> {
     }
 }
 
-impl<'src, I, O, E, A, L> Parser<'src, I, O, E> for Labelled<A, L>
+impl<I, O, E, A, L> Parser<I, O, E> for Labelled<A, L>
 where
-    I: Input + 'src,
-    E: ParserExtra<'src, I>,
-    A: Parser<'src, I, O, E>,
+    I: Input,
+    E: ParserExtra<I>,
+    A: Parser<I, O, E>,
     L: Clone,
-    E::Error: LabelError<'src, I, L>,
+    for<'src> ErrOfEx<'src,I,E>: LabelError<'src, I::Token,I::Span, L>,
+    O: Hkt,
 {
     #[doc(hidden)]
     #[cfg(feature = "debug")]
@@ -103,7 +111,10 @@ where
     }
 
     #[inline]
-    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+    fn go<'src, D: Driver>(
+        &self,
+        inp: &mut InputRef<'src, '_, I, E>,
+    ) -> PResult<D::Mode, O::Of<'src>> {
         LabelledWith {
             is_context: self.is_context,
             is_builtin: self.is_builtin,
@@ -164,13 +175,14 @@ impl<A, L, F> LabelledWith<A, L, F> {
     }
 }
 
-impl<'src, I, O, E, A, L, F> Parser<'src, I, O, E> for LabelledWith<A, L, F>
+impl<I, O, E, A, L, F> Parser<I, O, E> for LabelledWith<A, L, F>
 where
-    I: Input + 'src,
-    E: ParserExtra<'src, I>,
-    A: Parser<'src, I, O, E>,
+    I: Input,
+    E: ParserExtra<I>,
+    A: Parser<I, O, E>,
     F: Fn() -> L,
-    E::Error: LabelError<'src, I, L>,
+    for<'src> ErrOfEx<'src, I, E>: LabelError<'src, I::Token,I::Span, L>,
+    O: Hkt,
 {
     #[doc(hidden)]
     #[cfg(feature = "debug")]
@@ -221,7 +233,10 @@ where
     }
 
     #[inline]
-    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+    fn go<'src, D: Driver>(
+        &self,
+        inp: &mut InputRef<'src, '_, I, E>,
+    ) -> PResult<D::Mode, O::Of<'src>> {
         if D::Policy::STRICT {
             return self.parser.go::<D>(inp);
         }

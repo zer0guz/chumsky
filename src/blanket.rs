@@ -1,10 +1,11 @@
 use super::*;
 
-impl<'src, T, I, O, E> Parser<'src, I, O, E> for &T
+impl<T, I, O, E> Parser<I, O, E> for &T
 where
-    T: ?Sized + Parser<'src, I, O, E>,
-    I: Input + 'src,
-    E: ParserExtra<'src, I>,
+    T: ?Sized + Parser<I, O, E>,
+    I: Input,
+    E: ParserExtra<I>,
+    O:Hkt,
 {
     #[doc(hidden)]
     #[cfg(feature = "debug")]
@@ -12,7 +13,7 @@ where
         (*self).node_info(scope)
     }
 
-    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O>
+    fn go<'src,D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O::Of<'src>>
     where
         Self: Sized,
     {
@@ -22,19 +23,21 @@ where
     go_extra!(O);
 }
 
-impl<'src, T, I, O, E> ConfigParser<'src, I, O, E> for &T
+impl<T, I, O, E> ConfigParser<I, O, E> for &T
 where
-    T: ?Sized + ConfigParser<'src, I, O, E>,
-    I: Input + 'src,
-    E: ParserExtra<'src, I>,
+    T: ?Sized + ConfigParser<I, O, E>,
+    I: Input,
+    E: ParserExtra<I>,
+        O:Hkt,
+
 {
     type Config = T::Config;
 
-    fn go_cfg<D: Driver>(
+    fn go_cfg<'src,D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         cfg: Self::Config,
-    ) -> PResult<D::Mode, O> {
+    ) -> PResult<D::Mode, O::Of<'src>> {
         D::invoke_cfg(*self, inp, cfg)
     }
 }

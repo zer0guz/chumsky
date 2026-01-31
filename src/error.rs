@@ -73,15 +73,8 @@ pub use label::LabelError;
 /// assert_eq!(numeral.parse("f").into_errors(), vec![MyError::NotADigit((0..1).into(), 'f')]);
 /// ```
 // TODO: Add support for more specialised kinds of error: unclosed delimiters, and more
-pub trait Error<'src, I: Input + 'src>:
-    Sized + LabelError<'src, I, DefaultExpected<'src, TokenOf<'src, I>>>
-{
-    /// Merge two errors that point to the same input together, combining their information.
-    #[inline(always)]
-    fn merge(self, other: Self) -> Self {
-        #![allow(unused_variables)]
-        self
-    }
+pub trait ErrorHkt<T, S> {
+    type Err<'src>: LabelError<'src, T, S, DefaultExpected<'src, T>>;
 }
 
 /// A ZST error type that tracks only whether a parse error occurred at all. This type is for when
@@ -101,15 +94,13 @@ pub trait Error<'src, I: Input + 'src>:
 #[derive(PartialEq, Eq, PartialOrd, Ord, Debug, Copy, Clone, Default)]
 pub struct EmptyErr(());
 
-impl<'a, I: Input + 'a> Error<'a, I> for EmptyErr {}
+impl<'a, T, S> ErrorHkt<T, S> for EmptyErr {
+    type Err<'src> = Self;
+}
 
-impl<'a, I: Input, L> LabelError<'a, I, L> for EmptyErr {
+impl<'a, T, S, L> LabelError<'a, T, S, L> for EmptyErr {
     #[inline(always)]
-    fn expected_found<E: IntoIterator<Item = L>>(
-        _: E,
-        _: Option<MaybeRef<'a, TokenOf<'a, I>>>,
-        _: SpanOf<'a, I>,
-    ) -> Self {
+    fn expected_found<E: IntoIterator<Item = L>>(_: E, _: Option<MaybeRef<'a, T>>, _: S) -> Self {
         EmptyErr(())
     }
 }
@@ -152,14 +143,16 @@ impl<S> Cheap<S> {
     }
 }
 
-impl<'src, I: Input> Error<'src, I> for Cheap<SpanOf<'src, I>> {}
+impl<T, S> ErrorHkt<T, S> for Cheap<S> {
+    type Err<'src> = Self;
+}
 
-impl<'src, I: Input, L> LabelError<'src, I, L> for Cheap<SpanOf<'src, I>> {
+impl<'src, T, S, L> LabelError<'src, T, S, L> for Cheap<S> {
     #[inline]
     fn expected_found<E: IntoIterator<Item = L>>(
         _expected: E,
-        _found: Option<MaybeRef<'src, TokenOf<'src, I>>>,
-        span: SpanOf<'src, I>,
+        _found: Option<MaybeRef<'src, T>>,
+        span: S,
     ) -> Self {
         Self { span }
     }
@@ -240,14 +233,16 @@ impl<'a, T, S> Simple<'a, T, S> {
     }
 }
 
-impl<'a, I: Input> Error<'a, I> for Simple<'a, TokenOf<'a, I>, SpanOf<'a, I>> {}
+impl<T, S> ErrorHkt<T, S> for Simple<'_, T, S> {
+    type Err<'src> = Simple<'src, T, S>;
+}
 
-impl<'a, I: Input, L> LabelError<'a, I, L> for Simple<'a, TokenOf<'a, I>, SpanOf<'a, I>> {
+impl<'a, T, S, L> LabelError<'a, T, S, L> for Simple<'a, T, S> {
     #[inline]
     fn expected_found<E: IntoIterator<Item = L>>(
         _expected: E,
-        found: Option<MaybeRef<'a, TokenOf<'a, I>>>,
-        span: SpanOf<'a, I>,
+        found: Option<MaybeRef<'a, T>>,
+        span: S,
     ) -> Self {
         Self { span, found }
     }
@@ -710,9 +705,14 @@ impl<'a, T, S> Rich<'a, T, S> {
     }
 }
 
-impl<'src, I: Input> Error<'src, I> for Rich<'src, TokenOf<'src, I>, SpanOf<'src, I>>
+impl<T, S> ErrorHkt<T, S> for Rich<'_, T, S> where T: PartialEq {
+    type Err<'src> = Rich<'src, T, S>;
+}
+
+impl<'src, T, S, L> LabelError<'src, T, S, L> for Rich<'src, T, S>
 where
-    TokenOf<'src, I>: PartialEq,
+    T: PartialEq,
+    L: Into<RichPattern<'src, T>>,
 {
     #[inline]
     fn merge(self, other: Self) -> Self {
@@ -723,18 +723,11 @@ where
             context: self.context, // TOOD: Merge contexts
         }
     }
-}
-
-impl<'src, I: Input, L> LabelError<'src, I, L> for Rich<'src, TokenOf<'src, I>, SpanOf<'src, I>>
-where
-    TokenOf<'src, I>: PartialEq,
-    L: Into<RichPattern<'src, TokenOf<'src, I>>>,
-{
     #[inline]
     fn expected_found<E: IntoIterator<Item = L>>(
         expected: E,
-        found: Option<MaybeRef<'src, TokenOf<'src, I>>>,
-        span: SpanOf<'src, I>,
+        found: Option<MaybeRef<'src, T>>,
+        span: S,
     ) -> Self {
         Self {
             span,
@@ -750,8 +743,8 @@ where
     fn merge_expected_found<E: IntoIterator<Item = L>>(
         mut self,
         new_expected: E,
-        new_found: Option<MaybeRef<'src, TokenOf<'src, I>>>,
-        _span: SpanOf<'src, I>,
+        new_found: Option<MaybeRef<'src, T>>,
+        _span: S,
     ) -> Self {
         match &mut *self.reason {
             RichReason::ExpectedFound { expected, found } => {
@@ -773,8 +766,8 @@ where
     fn replace_expected_found<E: IntoIterator<Item = L>>(
         mut self,
         new_expected: E,
-        new_found: Option<MaybeRef<'src, TokenOf<'src, I>>>,
-        span: SpanOf<'src, I>,
+        new_found: Option<MaybeRef<'src, T>>,
+        span: S,
     ) -> Self {
         self.span = span;
         match &mut *self.reason {
@@ -811,7 +804,7 @@ where
         }
     }
     #[inline]
-    fn in_context(&mut self, label: L, span: SpanOf<'src, I>) {
+    fn in_context(&mut self, label: L, span: S) {
         let label = label.into();
         if self.context.iter().all(|(l, _)| l != &label) {
             self.context.push((label, span));

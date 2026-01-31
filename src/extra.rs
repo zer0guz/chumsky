@@ -4,6 +4,8 @@
 use inspector::Inspector;
 pub use inspector::SimpleState;
 
+use crate::error::ErrorHkt;
+
 use super::*;
 
 type DefaultErr = EmptyErr;
@@ -17,13 +19,13 @@ type DefaultCtx = ();
 ///
 /// This trait is sealed and so cannot be implemented by other crates because all uses should instead
 /// go through the types defined in this module.
-pub trait ParserExtra<'a, I>: Sealed
+pub trait ParserExtra<I>: Sealed
 where
-    I: Input + 'a,
+    I: Input,
 {
     /// Error type to use for the parser. This type must implement [`Error`], and when it fails,
     /// the parser will return a set of this type to describe why the failure occurred.
-    type Error: Error<'a,I>;
+    type ErrorFam: ErrorHkt<I::Token,I::Span>; 
     /// State type to use for the parser. This is used to provide stateful *output* of the parser,
     /// such as interned identifiers or position-dependent name resolution, however *cannot* influence
     /// the actual progress of the parser - for that, use [`Self::Context`].
@@ -36,7 +38,7 @@ where
     /// but for things that don't wish to alter the actual rules of parsing, one should instead prefer [`Self::State`].
     ///
     /// For examples of using this type, see [`Parser::ignore_with_ctx`], [`Parser::then_with_ctx`] and [`ConfigParser::configure`].
-    type Context: 'a;
+    type ContextFam: Hkt;
 }
 
 /// Use all default extra types. See [`ParserExtra`] for more details.
@@ -60,14 +62,25 @@ pub type Context<C> = Full<DefaultErr, DefaultState, C>;
 pub struct Full<E, S, C>(PhantomData<(E, S, C)>);
 
 impl<E, S, C> Sealed for Full<E, S, C> {}
-impl<'a, I, E, S, C> ParserExtra<'a, I> for Full<E, S, C>
+impl<I, E, S, C> ParserExtra<I> for Full<E, S, C>
 where
-    I: Input + 'a,
-    E: Error<'a, I>,
+    I: Input,
     S: Inspector<I>,
-    C: 'a,
+    C: Hkt, 
+    E: error::ErrorHkt<I::Token,I::Span>
 {
-    type Error = E;
+    type ErrorFam  = E;
     type State = S;
-    type Context = C;
+    type ContextFam = C;
+}
+
+pub type CtxOf<'src, I, Ex> = <<Ex as ParserExtra<I>>::ContextFam as Hkt>::Of<'src>;
+pub type ErrOfEx<'src, I, Ex> = <<Ex as ParserExtra<I>>::ErrorFam as ErrorHkt<<I as Input>::Token,<I as Input>::Span>>::Err<'src>;
+
+
+pub struct CtxOut<O>(core::marker::PhantomData<O>);
+
+impl<O: Hkt> Hkt for CtxOut<O> {
+    type Of<'src>
+        = O::Of<'src>;
 }

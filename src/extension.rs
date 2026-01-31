@@ -27,12 +27,12 @@
 //! pub struct Null_;
 //!
 //! // We implement `ExtParser` for our null byte parser, plugging us into the chumsky ecosystem
-//! impl<'src, I, E> ExtParser<'src, I, (), E> for Null_
+//! impl<'src, I, E> ExtParser<I, (), E> for Null_
 //! where
 //!     I: Input<'src, Token = u8>,
-//!     E: extra::ParserExtra<'src, I>,
+//!     E: extra::ParserExtra<I>,
 //! {
-//!     fn parse(&self, inp: &mut InputRef<'src, '_, I, E>) -> Result<(), E::Error> {
+//!     fn parse(&self, inp: &mut InputRef<'src, '_, I, E>) -> Result<(), ErrOfEx<'src,I,E>> {
 //!         let before = inp.cursor();
 //!         match inp.next_maybe().as_deref() {
 //!             // The next token was a null byte, meaning that parsing was successful
@@ -79,6 +79,8 @@ pub mod v1 {
 }
 
 mod current {
+    use crate::extra::ErrOfEx;
+
     use super::*;
 
     /// A trait implemented by extension parsers.
@@ -101,12 +103,12 @@ mod current {
     /// pub trait ParserExt<'src, I, O, E>
     /// where
     ///     I: Input,
-    ///     E: extra::ParserExtra<'src, I>
+    ///     E: extra::ParserExtra<I>
     /// {
     ///     fn frobnicated_with<B>(self, other: B) -> FrobnicatedWith<Self, B>
     ///     where
     ///         Self: Sized,
-    ///         B: Parser<'src, I, O, E>,
+    ///         B: Parser<I, O, E>,
     ///     {
     ///         FrobnicatedWith { a: self, b: other }
     ///     }
@@ -114,11 +116,11 @@ mod current {
     /// ```
     ///
     /// Now, users can import your trait and do `a.frobnicate_with(b)` as if your parser were native to chumsky!
-    pub trait ExtParser<'src, I: Input + 'src, O, E: ParserExtra<'src, I>> {
+    pub trait ExtParser<I: Input, O: Hkt, E: ParserExtra<I>> {
         /// Attempt parsing on the given input.
         ///
         /// See [`InputRef`] for more information about how you can work with parser inputs.
-        fn parse(&self, inp: &mut InputRef<'src, '_, I, E>) -> Result<O, E::Error>;
+        fn parse<'src>(&self, inp: &mut InputRef<'src, '_, I, E>) -> Result<O::Of<'src>, ErrOfEx<'src,I,E>>;
 
         /// Attempt to check the given input.
         ///
@@ -129,8 +131,9 @@ mod current {
         ///
         /// By default, this method just uses `ExtParser::parse`, dropping the output. You may want to override the
         /// implementation so that this output is never even generated, thereby improving performance.
-        fn check(&self, inp: &mut InputRef<'src, '_, I, E>) -> Result<(), E::Error> {
-            self.parse(inp).map(|_| ())
+        fn check<'src>(&self, inp: &mut InputRef<'src, '_, I, E>) -> Result<(), ErrOfEx<'src,I,E>>
+        {
+            self.parse(inp).map(|_o| ())
         }
     }
 
@@ -151,14 +154,18 @@ mod current {
     #[repr(transparent)]
     pub struct Ext<T: ?Sized>(pub T);
 
-    impl<'src, I, O, E, P> Parser<'src, I, O, E> for Ext<P>
+    impl<I, O, E, P> Parser<I, O, E> for Ext<P>
     where
-        I: Input + 'src,
-        E: ParserExtra<'src, I>,
-        P: ExtParser<'src, I, O, E>,
+        I: Input,
+        E: ParserExtra<I>,
+        P: ExtParser<I, O, E>,
+        O: Hkt,
     {
         #[inline(always)]
-        fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+        fn go<'src, D: Driver>(
+            &self,
+            inp: &mut InputRef<'src, '_, I, E>,
+        ) -> PResult<D::Mode, O::Of<'src>> {
             let before = inp.cursor();
             match D::Mode::choose(&mut *inp, |inp| self.0.parse(inp), |inp| self.0.check(inp)) {
                 Ok(out) => Ok(out),

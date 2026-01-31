@@ -25,7 +25,7 @@ pub trait Mode {
     type Output<T>;
 
     /// Bind the result of a closure into an output
-    fn bind<T, F: FnOnce() -> T>(f: F) -> Self::Output<T>;
+    fn bind<'src,T, F: FnOnce() -> T>(f: F) -> Self::Output<T>;
 
     /// Given an [`Output`](Self::Output), takes its value and return a newly generated output
     fn map<T, U, F: FnOnce(T) -> U>(x: Self::Output<T>, f: F) -> Self::Output<U>;
@@ -57,72 +57,81 @@ pub trait Mode {
     /// Invoke a parser user the current mode. This is normally equivalent to
     /// [`parser.go::<D>(inp)`](Parser::go), but it can be called on unsized values such as
     /// `dyn Parser`.
-    fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
-    where
-        I: Input + 'a,
-        E: ParserExtra<'a, I>,
-        P: Parser<'a, I, O, E> + ?Sized;
-
-    fn invoke_strict<'a, I, O, E, P>(
+    fn invoke<'src, I, O, E, P>(
         parser: &P,
-        inp: &mut InputRef<'a, '_, I, E>,
-    ) -> PResult<Self, O>
+        inp: &mut InputRef<'src, '_, I, E>,
+    ) -> PResult<Self, O::Of<'src>>
     where
-        I: Input + 'a,
-        E: ParserExtra<'a, I>,
-        P: Parser<'a, I, O, E> + ?Sized;
+        I: Input,
+        E: ParserExtra<I>,
+        P: Parser<I, O, E> + ?Sized,
+        O: Hkt;
+
+    fn invoke_strict<'src, I, O, E, P>(
+        parser: &P,
+        inp: &mut InputRef<'src, '_, I, E>,
+    ) -> PResult<Self, O::Of<'src>>
+    where
+        I: Input,
+        E: ParserExtra<I>,
+        P: Parser<I, O, E> + ?Sized,
+        O: Hkt;
 
     /// Invoke a parser with configuration using the current mode. This is normally equivalent
     /// to [`parser.go::<D>(inp)`](ConfigParser::go_cfg), but it can be called on unsized values
     /// such as `dyn Parser`.
-    fn invoke_cfg<'a, I, O, E, P>(
+    fn invoke_cfg<'src, I, O, E, P>(
         parser: &P,
-        inp: &mut InputRef<'a, '_, I, E>,
+        inp: &mut InputRef<'src, '_, I, E>,
         cfg: P::Config,
-    ) -> PResult<Self, O>
+    ) -> PResult<Self, O::Of<'src>>
     where
-        I: Input + 'a,
-        E: ParserExtra<'a, I>,
-        P: ConfigParser<'a, I, O, E> + ?Sized;
+        I: Input,
+        E: ParserExtra<I>,
+        P: ConfigParser<I, O, E> + ?Sized,
+        O: Hkt;
 
     #[cfg(feature = "pratt")]
     fn invoke_pratt_op_prefix<'src, 'parse, Op, I, O, E>(
         op: &Op,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
-        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self, O>,
-    ) -> pratt::OperatorResult<Self::Output<O>, ()>
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self,  O::Of<'src>>,
+    ) -> pratt::OperatorResult<Self::Output< O::Of<'src>>, ()>
     where
-        Op: pratt::Operator<'src, I, O, E>,
+        Op: pratt::Operator<I, O, E>,
         I: Input,
-        E: ParserExtra<'src, I>;
+        E: ParserExtra<I>,
+        O: Hkt;
     #[cfg(feature = "pratt")]
     fn invoke_pratt_op_postfix<'src, 'parse, Op, I, O, E>(
         op: &Op,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
-        lhs: Self::Output<O>,
+        lhs: Self::Output< O::Of<'src>>,
         min_power: i32,
-    ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
+    ) -> pratt::OperatorResult<Self::Output< O::Of<'src>>, Self::Output< O::Of<'src>>>
     where
-        Op: pratt::Operator<'src, I, O, E>,
+        Op: pratt::Operator<I, O, E>,
         I: Input,
-        E: ParserExtra<'src, I>;
+        E: ParserExtra<I>,
+        O: Hkt;
     #[cfg(feature = "pratt")]
     fn invoke_pratt_op_infix<'src, 'parse, Op, I, O, E>(
         op: &Op,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
-        lhs: Self::Output<O>,
+        lhs: Self::Output< O::Of<'src>>,
         min_power: i32,
-        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self, O>,
-    ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self,  O::Of<'src>>,
+    ) -> pratt::OperatorResult<Self::Output< O::Of<'src>>, Self::Output< O::Of<'src>>>
     where
-        Op: pratt::Operator<'src, I, O, E>,
+        Op: pratt::Operator<I, O, E>,
         I: Input,
-        E: ParserExtra<'src, I>;
+        E: ParserExtra<I>,
+        O: Hkt;
 }
 
 /// Emit mode - generates parser output
@@ -173,36 +182,42 @@ impl Mode for Emit {
     }
 
     #[inline(always)]
-    fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
+    fn invoke<'src, I, O, E, P>(
+        parser: &P,
+        inp: &mut InputRef<'src, '_, I, E>,
+    ) -> PResult<Self, O::Of<'src>>
     where
-        I: Input + 'a,
-        E: ParserExtra<'a, I>,
-        P: Parser<'a, I, O, E> + ?Sized,
+        I: Input,
+        E: ParserExtra<I>,
+        P: Parser<I, O, E> + ?Sized,
+        O: Hkt,
     {
         parser.go_emit(inp)
     }
-    fn invoke_strict<'a, I, O, E, P>(
+    fn invoke_strict<'src, I, O, E, P>(
         parser: &P,
-        inp: &mut InputRef<'a, '_, I, E>,
-    ) -> PResult<Self, O>
+        inp: &mut InputRef<'src, '_, I, E>,
+    ) -> PResult<Self, O::Of<'src>>
     where
-        I: Input + 'a,
-        E: ParserExtra<'a, I>,
-        P: Parser<'a, I, O, E> + ?Sized,
+        I: Input,
+        E: ParserExtra<I>,
+        P: Parser<I, O, E> + ?Sized,
+        O: Hkt,
     {
         parser.go_emit_strict(inp)
     }
 
     #[inline(always)]
-    fn invoke_cfg<'a, I, O, E, P>(
+    fn invoke_cfg<'src, I, O, E, P>(
         parser: &P,
-        inp: &mut InputRef<'a, '_, I, E>,
+        inp: &mut InputRef<'src, '_, I, E>,
         cfg: P::Config,
-    ) -> PResult<Self, O>
+    ) -> PResult<Self, O::Of<'src>>
     where
-        I: Input + 'a,
-        E: ParserExtra<'a, I>,
-        P: ConfigParser<'a, I, O, E> + ?Sized,
+        I: Input,
+        E: ParserExtra<I>,
+        P: ConfigParser<I, O, E> + ?Sized,
+        O: Hkt
     {
         parser.go_emit_cfg(inp, cfg)
     }
@@ -213,12 +228,13 @@ impl Mode for Emit {
         op: &Op,
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
-        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self, O>,
-    ) -> pratt::OperatorResult<Self::Output<O>, ()>
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self,  O::Of<'src>>,
+    ) -> pratt::OperatorResult<Self::Output< O::Of<'src>>, ()>
     where
-        Op: pratt::Operator<'src, I, O, E>,
+        Op: pratt::Operator<I, O, E>,
         I: Input,
-        E: ParserExtra<'src, I>,
+        E: ParserExtra<I>,
+        O: Hkt,
     {
         op.do_parse_prefix_emit(inp, pre_expr, &f)
     }
@@ -229,13 +245,14 @@ impl Mode for Emit {
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
-        lhs: Self::Output<O>,
+        lhs: Self::Output<O::Of<'src>>,
         min_power: i32,
-    ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
+    ) -> pratt::OperatorResult<Self::Output<O::Of<'src>>, Self::Output<O::Of<'src>>>
     where
-        Op: pratt::Operator<'src, I, O, E>,
+        Op: pratt::Operator<I, O, E>,
         I: Input,
-        E: ParserExtra<'src, I>,
+        E: ParserExtra<I>,
+        O: Hkt
     {
         op.do_parse_postfix_emit(inp, pre_expr, pre_op, lhs, min_power)
     }
@@ -246,14 +263,15 @@ impl Mode for Emit {
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
-        lhs: Self::Output<O>,
+        lhs: Self::Output<O::Of<'src>>,
         min_power: i32,
-        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self, O>,
-    ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
+        f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self, O::Of<'src>>,
+    ) -> pratt::OperatorResult<Self::Output<O::Of<'src>>, Self::Output<O::Of<'src>>>
     where
-        Op: pratt::Operator<'src, I, O, E>,
+        Op: pratt::Operator<I, O, E>,
         I: Input,
-        E: ParserExtra<'src, I>,
+        E: ParserExtra<I>,
+        O: Hkt
     {
         op.do_parse_infix_emit(inp, pre_expr, pre_op, lhs, min_power, &f)
     }
@@ -295,37 +313,40 @@ impl Mode for Check {
     }
 
     #[inline(always)]
-    fn invoke<'a, I, O, E, P>(parser: &P, inp: &mut InputRef<'a, '_, I, E>) -> PResult<Self, O>
+    fn invoke<'src, I, O, E, P>(parser: &P, inp: &mut InputRef<'src, '_, I, E>) -> PResult<Self, O::Of<'src>>
     where
-        I: Input + 'a,
-        E: ParserExtra<'a, I>,
-        P: Parser<'a, I, O, E> + ?Sized,
+        I: Input,
+        E: ParserExtra<I>,
+        P: Parser<I, O, E> + ?Sized,
+        O: Hkt
     {
         parser.go_check(inp)
     }
 
-    fn invoke_strict<'a, I, O, E, P>(
+    fn invoke_strict<'src, I, O, E, P>(
         parser: &P,
-        inp: &mut InputRef<'a, '_, I, E>,
-    ) -> PResult<Self, O>
+        inp: &mut InputRef<'src, '_, I, E>,
+    ) -> PResult<Self, O::Of<'src>>
     where
-        I: Input + 'a,
-        E: ParserExtra<'a, I>,
-        P: Parser<'a, I, O, E> + ?Sized,
+        I: Input,
+        E: ParserExtra<I>,
+        P: Parser<I, O, E> + ?Sized,
+        O: Hkt
     {
         parser.go_check_strict(inp)
     }
 
     #[inline(always)]
-    fn invoke_cfg<'a, I, O, E, P>(
+    fn invoke_cfg<'src, I, O, E, P>(
         parser: &P,
-        inp: &mut InputRef<'a, '_, I, E>,
+        inp: &mut InputRef<'src, '_, I, E>,
         cfg: P::Config,
-    ) -> PResult<Self, O>
+    ) -> PResult<Self, O::Of<'src>>
     where
-        I: Input + 'a,
-        E: ParserExtra<'a, I>,
-        P: ConfigParser<'a, I, O, E> + ?Sized,
+        I: Input,
+        E: ParserExtra<I>,
+        P: ConfigParser<I, O, E> + ?Sized,
+        O: Hkt
     {
         parser.go_check_cfg(inp, cfg)
     }
@@ -337,11 +358,12 @@ impl Mode for Check {
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self, O>,
-    ) -> pratt::OperatorResult<Self::Output<O>, ()>
+    ) -> pratt::OperatorResult<Self::Output<O::Of<'src>>, ()>
     where
-        Op: pratt::Operator<'src, I, O, E>,
+        Op: pratt::Operator<I, O, E>,
         I: Input,
-        E: ParserExtra<'src, I>,
+        E: ParserExtra<I>,
+        O: Hkt
     {
         op.do_parse_prefix_check(inp, pre_expr, &f)
     }
@@ -356,9 +378,10 @@ impl Mode for Check {
         min_power: i32,
     ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
     where
-        Op: pratt::Operator<'src, I, O, E>,
+        Op: pratt::Operator<I, O, E>,
         I: Input,
-        E: ParserExtra<'src, I>,
+        E: ParserExtra<I>,
+        O: Hkt
     {
         op.do_parse_postfix_check(inp, pre_expr, pre_op, lhs, min_power)
     }
@@ -369,14 +392,15 @@ impl Mode for Check {
         inp: &mut InputRef<'src, 'parse, I, E>,
         pre_expr: &input::Cursor<'src, 'parse, I>,
         pre_op: &input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
-        lhs: Self::Output<O>,
+        lhs: Self::Output<O::Of<'src>>,
         min_power: i32,
         f: &impl Fn(&mut InputRef<'src, 'parse, I, E>, i32) -> PResult<Self, O>,
     ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
     where
-        Op: pratt::Operator<'src, I, O, E>,
+        Op: pratt::Operator<I, O, E>,
         I: Input,
-        E: ParserExtra<'src, I>,
+        E: ParserExtra<I>,
+        O: Hkt
     {
         op.do_parse_infix_check(inp, pre_expr, pre_op, lhs, min_power, &f)
     }
@@ -415,24 +439,26 @@ pub trait Driver {
     type WithMode<M: Mode>: Driver<Mode = M, Policy = Self::Policy>;
     type WithPolicy<P: Policy>: Driver<Mode = Self::Mode, Policy = P>;
 
-    fn invoke<'a, I, O, E, P>(
+    fn invoke<'src, I, O, E, P>(
         parser: &P,
-        inp: &mut InputRef<'a, '_, I, E>,
-    ) -> PResult<Self::Mode, O>
+        inp: &mut InputRef<'src, '_, I, E>,
+    ) -> PResult<Self::Mode, O::Of<'src>>
     where
-        I: Input + 'a,
-        E: ParserExtra<'a, I>,
-        P: Parser<'a, I, O, E> + ?Sized;
+        I: Input,
+        E: ParserExtra<I>,
+        P: Parser<I, O, E> + ?Sized,
+        O: Hkt;
 
-    fn invoke_cfg<'a, I, O, E, P>(
+    fn invoke_cfg<'src, I, O, E, P>(
         parser: &P,
-        inp: &mut InputRef<'a, '_, I, E>,
+        inp: &mut InputRef<'src, '_, I, E>,
         cfg: P::Config,
-    ) -> PResult<Self::Mode, O>
+    ) -> PResult<Self::Mode, O::Of<'src>>
     where
-        I: Input + 'a,
-        E: ParserExtra<'a, I>,
-        P: ConfigParser<'a, I, O, E> + ?Sized;
+        I: Input,
+        E: ParserExtra<I>,
+        P: ConfigParser<I, O, E> + ?Sized,
+        O: Hkt;
 }
 
 pub struct Drive<M: Mode, P: Policy>(PhantomData<fn() -> (M, P)>);
@@ -444,14 +470,15 @@ impl<M: Mode, P: Policy> Driver for Drive<M, P> {
     type WithMode<M2: Mode> = Drive<M2, P>;
     type WithPolicy<P2: Policy> = Drive<M, P2>;
 
-    fn invoke<'a, I, O, E, Pa>(
+    fn invoke<'src, I, O, E, Pa>(
         parser: &Pa,
-        inp: &mut InputRef<'a, '_, I, E>,
-    ) -> PResult<Self::Mode, O>
+        inp: &mut InputRef<'src, '_, I, E>,
+    ) -> PResult<Self::Mode, O::Of<'src>>
     where
-        I: Input + 'a,
-        E: ParserExtra<'a, I>,
-        Pa: Parser<'a, I, O, E> + ?Sized,
+        I: Input,
+        E: ParserExtra<I>,
+        Pa: Parser<I, O, E> + ?Sized,
+        O: Hkt
     {
         if Self::Policy::STRICT {
             Self::Mode::invoke_strict(parser, inp)
@@ -460,15 +487,16 @@ impl<M: Mode, P: Policy> Driver for Drive<M, P> {
         }
     }
 
-    fn invoke_cfg<'a, I, O, E, Pa>(
+    fn invoke_cfg<'src, I, O, E, Pa>(
         parser: &Pa,
-        inp: &mut InputRef<'a, '_, I, E>,
+        inp: &mut InputRef<'src, '_, I, E>,
         cfg: Pa::Config,
-    ) -> PResult<Self::Mode, O>
+    ) -> PResult<Self::Mode, O::Of<'src>>
     where
-        I: Input+'a,
-        E: ParserExtra<'a, I>,
-        Pa: ConfigParser<'a, I, O, E> + ?Sized,
+        I: Input,
+        E: ParserExtra<I>,
+        Pa: ConfigParser<I, O, E> + ?Sized,
+        O: Hkt,
     {
         Self::Mode::invoke_cfg(parser, inp, cfg)
     }
@@ -489,7 +517,7 @@ pub type CheckStrict = Drive<Check, Strict>;
 pub type EmitRecover = Drive<Emit, Recover>;
 pub type CheckRecover = Drive<Check, Recover>;
 
-pub type DriverOut<D,O> = <<D as Driver>::Mode as Mode>::Output<O>;
+pub type DriverOut<D, O> = <<D as Driver>::Mode as Mode>::Output<O>;
 
 pub trait Sealed: Sized {}
 pub struct Bounds<T>(T);

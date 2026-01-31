@@ -103,11 +103,6 @@ pub type Never = <fn() -> ! as fn_traits::FnOnce<()>>::Output;
 
 // Reverse `From` or `Into<&'r T>` impl.
 
-pub enum Maybe2<'r, T, R: Deref<Target = T>> {
-    Owned(T),
-    Ref(R),
-    _PhantomVariant(PhantomData<&'r ()>, Never),
-}
 
 /// A value that may be a `T` or a mutable reference to a `T`.
 pub type MaybeMut<'a, T> = Maybe<'a, T, &'a mut T>;
@@ -338,4 +333,14 @@ impl<'src, T> IntoMaybe<'src, T> for Ref<'src, T> {
 impl<T> ref_or_val_sealed::Sealed<T> for T {}
 impl<'src, T> IntoMaybe<'src, T> for T {
     type Proj<U> = U;
+}
+
+impl<'a, T: ?Sized, U: ?Sized> AsRef<U> for util::Ref<'a, T>
+where
+    T: AsRef<U>,
+{
+    #[inline]
+    fn as_ref(&self) -> &U {
+        self.into_ref().as_ref()
+    }
 }

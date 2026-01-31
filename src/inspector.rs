@@ -5,7 +5,7 @@
 //! ever since his Sub-Etha Sens-O-Matic had started winking in the dead of night
 //! beside his pillar and woken him with a start."*
 use super::*;
-use crate::input::{Checkpoint, Cursor, InputFor, TokenOf};
+use crate::input::{Checkpoint, Cursor};
 
 
 /// A type that receives event hooks when certain parsing actions occur.
@@ -22,7 +22,7 @@ where
 
     /// This function is called when a new token is read from the input stream.
     // impl note: this should be called only when `self.cursor` is updated, not when we only peek at the next token.
-    fn on_token(&mut self, token: &TokenOf<'_, I>);
+    fn on_token(&mut self, token: &I::Token);
     /// This function is called when a combinator saves the current state of the parse.
     fn on_save<'parse>(&self, cursor: &Cursor<'_, 'parse, I>) -> Self::Checkpoint;
     /// This function is called when a combinator rewinds to an earlier state of the parser.
@@ -38,7 +38,7 @@ where
 {
     type Checkpoint = ();
     #[inline(always)]
-    fn on_token(&mut self, _: &<I as InputFor<'_>>::Token) {}
+    fn on_token(&mut self, _: &I::Token) {}
     #[inline(always)]
     fn on_save<'parse>(&self, _: &Cursor<'_, 'parse, I>) -> Self::Checkpoint {}
     #[inline(always)]
@@ -56,7 +56,7 @@ where
 {
     type Checkpoint = ();
     #[inline(always)]
-    fn on_token(&mut self, _: &TokenOf<'_,I>) {}
+    fn on_token(&mut self, _: &I::Token) {}
     #[inline(always)]
     fn on_save<'parse>(&self, _: &Cursor<'_, 'parse, I>) -> Self::Checkpoint {}
     #[inline(always)]
@@ -98,7 +98,7 @@ where
 {
     type Checkpoint = T;
     #[inline(always)]
-    fn on_token(&mut self, _: &TokenOf<'_,I>) {}
+    fn on_token(&mut self, _: &I::Token) {}
     #[inline(always)]
     fn on_save<'parse>(&self, _: &Cursor<'_, 'parse, I>) -> Self::Checkpoint {
         self.0.clone()
@@ -141,7 +141,7 @@ where
 {
     type Checkpoint = usize;
     #[inline(always)]
-    fn on_token(&mut self, _: &TokenOf<'_,I>) {}
+    fn on_token(&mut self, _: &I::Token) {}
     #[inline(always)]
     fn on_save<'parse>(&self, _: &Cursor<'_, 'parse, I>) -> Self::Checkpoint {
         self.0.len()

@@ -24,6 +24,8 @@
 //! internals and implementing your own strategies! If you come up with a useful strategy, feel free to open a PR
 //! against the [main repository](https://github.com/zesterer/chumsky/)!
 
+use crate::hkt::Lt;
+
 use super::*;
 
 /// A trait implemented by error recovery strategies. See [`Parser::recover_with`].
@@ -31,17 +33,15 @@ use super::*;
 /// This trait is sealed and so cannot be implemented by other crates because it has an unstable API. This may
 /// eventually change. For now, if you wish to implement a new strategy, consider using [`via_parser`] or
 /// [opening an issue/PR](https://github.com/zesterer/chumsky/issues/new).
-pub trait Strategy<'src, I: Input + 'src, O, E: ParserExtra<'src, I> = extra::Default>:
-    Sealed
-{
+pub trait Strategy<I: Input, O: Hkt, E: ParserExtra<I> = extra::Default>: Sealed {
     // Attempt to recover from a parsing failure.
     // The strategy should properly handle the alt error but is not required to handle rewinding.
     #[doc(hidden)]
-    fn recover<D: Driver, P: Parser<'src, I, O, E>>(
+    fn recover<'src, D: Driver, P: Parser<I, O, E>>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         parser: &P,
-    ) -> PResult<D::Mode, O>;
+    ) -> PResult<D::Mode, O::Of<'src>>;
 }
 
 /// See [`via_parser`].
@@ -54,17 +54,18 @@ pub fn via_parser<A>(parser: A) -> ViaParser<A> {
 }
 
 impl<A> Sealed for ViaParser<A> {}
-impl<'src, I, O, E, A> Strategy<'src, I, O, E> for ViaParser<A>
+impl<I, O, E, A> Strategy<I, O, E> for ViaParser<A>
 where
-    I: Input + 'src,
-    A: Parser<'src, I, O, E>,
-    E: ParserExtra<'src, I>,
+    I: Input,
+    A: Parser<I, O, E>,
+    E: ParserExtra<I>,
+    O: Hkt,
 {
-    fn recover<D: Driver, P: Parser<'src, I, O, E>>(
+    fn recover<'src, D: Driver, P: Parser<I, O, E>>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         _parser: &P,
-    ) -> PResult<D::Mode, O> {
+    ) -> PResult<D::Mode, O::Of<'src>> {
         let alt = inp.take_alt().unwrap(); // Can't fail!
         let out = match self.0.go::<D>(inp) {
             Ok(out) => out,
@@ -85,12 +86,13 @@ pub struct RecoverWith<A, S> {
     pub(crate) strategy: S,
 }
 
-impl<'src, I, O, E, A, S> Parser<'src, I, O, E> for RecoverWith<A, S>
+impl<I, O, E, A, S> Parser<I, O, E> for RecoverWith<A, S>
 where
-    I: Input + 'src,
-    E: ParserExtra<'src, I>,
-    A: Parser<'src, I, O, E>,
-    S: Strategy<'src, I, O, E>,
+    I: Input,
+    E: ParserExtra<I>,
+    A: Parser<I, O, E>,
+    S: Strategy<I, O, E>,
+    O: Hkt,
 {
     #[doc(hidden)]
     #[cfg(feature = "debug")]
@@ -98,7 +100,10 @@ where
         self.parser.node_info(scope)
     }
 
-    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+    fn go<'src, D: Driver>(
+        &self,
+        inp: &mut InputRef<'src, '_, I, E>,
+    ) -> PResult<D::Mode, O::Of<'src>> {
         let before = inp.save();
         match self.parser.go::<D>(inp) {
             Ok(out) => Ok(out),
@@ -132,18 +137,19 @@ pub struct SkipThenRetryUntil<S, U> {
 }
 
 impl<S, U> Sealed for SkipThenRetryUntil<S, U> {}
-impl<'src, I, O, E, S, U> Strategy<'src, I, O, E> for SkipThenRetryUntil<S, U>
+impl<I, O, E, S, U> Strategy<I, O, E> for SkipThenRetryUntil<S, U>
 where
-    I: Input + 'src,
-    S: Parser<'src, I, (), E>,
-    U: Parser<'src, I, (), E>,
-    E: ParserExtra<'src, I>,
+    I: Input,
+    S: Parser<I, (), E>,
+    U: Parser<I, (), E>,
+    E: ParserExtra<I>,
+    O: Hkt,
 {
-    fn recover<D: Driver, P: Parser<'src, I, O, E>>(
+    fn recover<'src, D: Driver, P: Parser<I, O, E>>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         parser: &P,
-    ) -> PResult<D::Mode, O> {
+    ) -> PResult<D::Mode, O::Of<'src>> {
         let alt = inp.take_alt().unwrap(); // Can't fail!
         loop {
             let before = inp.save();
@@ -191,25 +197,26 @@ pub struct SkipUntil<S, U, F> {
 }
 
 impl<S, U, F> Sealed for SkipUntil<S, U, F> {}
-impl<'src, I, O, E, S, U, F> Strategy<'src, I, O, E> for SkipUntil<S, U, F>
+impl<I, O, E, S, U, F> Strategy<I, O, E> for SkipUntil<S, U, F>
 where
-    I: Input + 'src,
-    S: Parser<'src, I, (), E>,
-    U: Parser<'src, I, (), E>,
-    F: Fn() -> O,
-    E: ParserExtra<'src, I>,
+    I: Input,
+    S: Parser<I, (), E>,
+    U: Parser<I, (), E>,
+    F: for<'src> Fn(Lt<'src>) -> O::Of<'src>,
+    E: ParserExtra<I>,
+    O: Hkt,
 {
-    fn recover<D: Driver, P: Parser<'src, I, O, E>>(
+    fn recover<'src, D: Driver, P: Parser<I, O, E>>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
         _parser: &P,
-    ) -> PResult<D::Mode, O> {
+    ) -> PResult<D::Mode, O::Of<'src>> {
         let alt = inp.take_alt().unwrap(); // Can't fail!
         loop {
             let before = inp.save();
             if let Ok(()) = self.until.go::<DoCheck<D>>(inp) {
                 inp.emit(alt.err);
-                break Ok(D::Mode::bind(|| (self.fallback)()));
+                break Ok(D::Mode::bind(|| (self.fallback)(Lt::new())));
             }
             inp.rewind(before);
 
@@ -233,54 +240,54 @@ pub fn skip_until<S, U, F>(skip: S, until: U, fallback: F) -> SkipUntil<S, U, F>
     }
 }
 
-/// A recovery parser that searches for a start and end delimiter, respecting nesting.
-///
-/// It is possible to specify additional delimiter pairs that are valid in the pattern's context for better errors. For
-/// example, you might want to also specify `[('[', ']'), ('{', '}')]` when recovering a parenthesized expression as
-/// this can aid in detecting delimiter mismatches.
-///
-/// A function that generates a fallback output on recovery is also required.
-// TODO: Make this a strategy, add an unclosed_delimiter error
-pub fn nested_delimiters<'src, 'parse, I, O, E, F, const N: usize>(
-    start: TokenOf<'src,I>,
-    end: TokenOf<'src,I>,
-    others: [(TokenOf<'src,I>, TokenOf<'src,I>); N],
-    fallback: F,
-) -> impl Parser<'src, I, O, E> + Clone + 'parse
-where
-    I: ValueInput,
-    TokenOf<'src,I>: PartialEq + Clone,
-    E: extra::ParserExtra<'src, I> + 'parse,
-    'src: 'parse,
-    F: Fn(SpanOf<'src,I>) -> O + Clone + 'parse,
-{
-    // TODO: Does this actually work? TESTS!
-    #[allow(clippy::tuple_array_conversions)]
-    // Clippy is overly eager to fine pointless non-problems
-    recursive({
-        let (start, end) = (start.clone(), end.clone());
-        |block| {
-            let mut many_block = Parser::boxed(
-                block
-                    .clone()
-                    .delimited_by(just(start.clone()), just(end.clone())),
-            );
-            for (s, e) in &others {
-                many_block = Parser::boxed(
-                    many_block.or(block.clone().delimited_by(just(s.clone()), just(e.clone()))),
-                );
-            }
+// /// A recovery parser that searches for a start and end delimiter, respecting nesting.
+// ///
+// /// It is possible to specify additional delimiter pairs that are valid in the pattern's context for better errors. For
+// /// example, you might want to also specify `[('[', ']'), ('{', '}')]` when recovering a parenthesized expression as
+// /// this can aid in detecting delimiter mismatches.
+// ///
+// /// A function that generates a fallback output on recovery is also required.
+// // TODO: Make this a strategy, add an unclosed_delimiter error
+// pub fn nested_delimiters<'parse, I, O, E, F, const N: usize>(
+//     start: I::Token,
+//     end: I::Token,
+//     others: [(I::Token, I::Token); N],
+//     fallback: F,
+// ) -> impl Parser<I, O, E> + Clone + 'parse
+// where
+//     I: ValueInput + 'parse,
+//     I::Token: PartialEq + Clone,
+//     E: extra::ParserExtra<I> + 'parse,
+//     F: Fn(I::Span,Lt<'parse>) -> O::Of<'parse> + Clone,
+//     O: Hkt,
+// {
+//     // TODO: Does this actually work? TESTS!
+//     #[allow(clippy::tuple_array_conversions)]
+//     // Clippy is overly eager to fine pointless non-problems
+//     recursive({
+//         let (start, end) = (start.clone(), end.clone());
+//         |block| {
+//             let mut many_block = Parser::boxed(
+//                 block
+//                     .clone()
+//                     .delimited_by(just(start.clone()), just(end.clone())),
+//             );
+//             for (s, e) in &others {
+//                 many_block = Parser::boxed(
+//                     many_block.or(block.clone().delimited_by(just(s.clone()), just(e.clone()))),
+//                 );
+//             }
 
-            let skip = [start, end]
-                .into_iter()
-                .chain(IntoIterator::into_iter(others).flat_map(|(s, e)| [s, e]))
-                .collect::<Vec<_>>();
+//             let skip = [start, end]
+//                 .into_iter()
+//                 .chain(IntoIterator::into_iter(others).flat_map(|(s, e)| [s, e]))
+//                 .collect::<Vec<_>>();
 
-            many_block
-                .or(any().and_is(none_of(skip)).ignored())
-                .repeated()
-        }
-    })
-    .delimited_by(just(start), just(end))
-    .map_with(move |_, e| fallback(e.span()))
-}
+//             many_block
+//                 .or(any().and_is(none_of(skip)).ignored())
+//                 .repeated()
+//         }
+//     })
+//     .delimited_by(just(start), just(end))
+//     .map_with(move |_, e| fallback(e.span(),Lt::new()))
+// }

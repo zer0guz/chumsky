@@ -1,5 +1,6 @@
 //! TODO: Add documentation when approved
 
+use crate::extra::ErrOfEx;
 use crate::input::SliceOf;
 
 use super::*;
@@ -31,16 +32,21 @@ pub const fn number<const F: u128, I, O, E>() -> Number<F, I, O, E> {
 /// A label denoting a parseable number.
 pub struct ExpectedNumber;
 
-impl<'src, const F: u128, I, O, E> Parser<'src, I, O, E> for Number<F, I, O, E>
+impl<const F: u128, I, O, E> Parser<I, O, E> for Number<F, I, O, E>
 where
     O: FromLexical,
-    I: SliceInput<Cursor = usize> + 'src,
-    SliceOf<'src,I>: AsRef<[u8]>,
-    E: ParserExtra<'src, I>,
-    E::Error: LabelError<'src, I, ExpectedNumber>,
+    I: SliceInput<Cursor = usize>,
+    for<'src> SliceOf<'src,I>: AsRef<[u8]>,
+    E: ParserExtra<I>,
+    for<'src> ErrOfEx<'src,I,E>: LabelError<'src, I::Token,I::Span, ExpectedNumber>,
+    O: Hkt,
+    for<'src> O::Of<'src>: FromLexical,
 {
     #[inline]
-    fn go<D: Driver>(&self, inp: &mut InputRef<'src, '_, I, E>) -> PResult<D::Mode, O> {
+    fn go<'src, D: Driver>(
+        &self,
+        inp: &mut InputRef<'src, '_, I, E>,
+    ) -> PResult<D::Mode, O::Of<'src>> {
         let before = inp.cursor();
         match parse_partial(inp.slice_trailing_inner().as_ref()) {
             Ok((out, skip)) => {
