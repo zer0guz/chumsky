@@ -62,17 +62,17 @@ where
 
 
 
-pub struct SliceOut<I>(core::marker::PhantomData<I>);
+pub struct SliceOut<I: ?Sized>(core::marker::PhantomData<I>);
 
-impl<I: SliceInput> Hkt for SliceOut<I> {
+impl<I: SliceInput + ?Sized> Hkt for SliceOut<I> {
     type Of<'src> = SliceOf<'src,I>;
 }
 
-pub struct SpannedOut<I, OA>(core::marker::PhantomData<(I, OA)>);
+pub struct SpannedOut<I: ?Sized, OA>(core::marker::PhantomData<(*const I, OA)>);
 
 impl<I, OA> Hkt for SpannedOut<I, OA>
 where
-    I: Input,
+    I: Input + ?Sized,
     OA: Hkt,
     for<'src> I::Span: WrappingSpan<OA::Of<'src>>,
 {
@@ -120,7 +120,7 @@ impl_outfam_for_tuples! {
     A B C D E F G H I J K L M N O P Q R S T U V W X Y Z
 }
 
-pub trait MapWithFn<OA: Hkt, I: Input, E: ParserExtra<I>> {
+pub trait MapWithFn<OA: Hkt, I: Input + ?Sized, E: ParserExtra<I>> {
     type Out: Hkt;
 
     fn apply<'src>(
@@ -130,7 +130,7 @@ pub trait MapWithFn<OA: Hkt, I: Input, E: ParserExtra<I>> {
     ) -> <Self::Out as Hkt>::Of<'src>;
 }
 
-pub trait MapFn<OA: Hkt, I: Input, E: ParserExtra<I>> {
+pub trait MapFn<OA: Hkt, I: Input + ?Sized, E: ParserExtra<I>> {
     type Out: Hkt;
 
     fn apply<'src>(
@@ -158,7 +158,7 @@ impl<OA, I, E, F, U> MapWithFn<OA, I, E> for Mapper<F, U>
 where
     OA: Hkt,
     U: Hkt,
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     F: for<'src> Fn(OA::Of<'src>, &mut MapExtra<'src, '_, I, E>) -> U::Of<'src>,
 {
@@ -178,7 +178,7 @@ impl<OA, I, E, F, U> MapFn<OA, I, E> for Mapper<F, U>
 where
     OA: Hkt,
     U: Hkt,
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     F: for<'src> Fn(OA::Of<'src>, Lt<'src>) -> U::Of<'src>,
 {
@@ -195,7 +195,7 @@ where
 }
 
 
-pub trait TryMapWithFn<OA: Hkt, I: Input, E: ParserExtra<I>> {
+pub trait TryMapWithFn<OA: Hkt, I: Input + ?Sized, E: ParserExtra<I>> {
     type Out: Hkt;
 
     fn apply<'src>(
@@ -208,7 +208,7 @@ pub trait TryMapWithFn<OA: Hkt, I: Input, E: ParserExtra<I>> {
 impl<OA, I, E, F, U> TryMapWithFn<OA, I, E> for Mapper<F, U>
 where
     OA: Hkt,
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     U: Hkt,
     F: for<'src> Fn(OA::Of<'src>, &mut MapExtra<'src, '_, I, E>)

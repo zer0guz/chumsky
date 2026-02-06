@@ -199,7 +199,7 @@ pub struct Padded<A> {
 
 impl<I, O, E, A> Parser<I, O, E> for Padded<A>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     I::Token: Char,
     A: Parser<I, O, E>,
@@ -869,7 +869,7 @@ pub mod unicode {
 
         type Token = &'a Grapheme;
         #[inline]
-        fn begin<'src>(self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+        fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
             (0, self)
         }
 

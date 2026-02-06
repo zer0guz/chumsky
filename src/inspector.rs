@@ -13,7 +13,7 @@ use crate::input::{Checkpoint, Cursor};
 /// If you don't need to receive event hooks, use [`SimpleState`].
 pub trait Inspector<I>
 where
-    I: Input,
+    I: Input + ?Sized,
 {
     /// A type the Inspector can use to revert to a previous state.
     ///
@@ -34,7 +34,7 @@ where
 
 impl<I> Inspector<I> for ()
 where
-    I: Input,
+    I: Input + ?Sized,
 {
     type Checkpoint = ();
     #[inline(always)]
@@ -136,7 +136,7 @@ impl<T> From<T> for RollbackState<T> {
 pub struct TruncateState<T>(pub Vec<T>);
 impl<T, I> Inspector<I> for TruncateState<T>
 where
-    I: Input,
+    I: Input+ ?Sized,
     T: Clone,
 {
     type Checkpoint = usize;

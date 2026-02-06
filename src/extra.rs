@@ -21,7 +21,7 @@ type DefaultCtx = ();
 /// go through the types defined in this module.
 pub trait ParserExtra<I>: Sealed
 where
-    I: Input,
+    I: Input + ?Sized,
 {
     /// Error type to use for the parser. This type must implement [`Error`], and when it fails,
     /// the parser will return a set of this type to describe why the failure occurred.
@@ -64,7 +64,7 @@ pub struct Full<E, S, C>(PhantomData<(E, S, C)>);
 impl<E, S, C> Sealed for Full<E, S, C> {}
 impl<I, E, S, C> ParserExtra<I> for Full<E, S, C>
 where
-    I: Input,
+    I: Input + ?Sized,
     S: Inspector<I>,
     C: Hkt, 
     E: error::ErrorHkt<I::Token,I::Span>

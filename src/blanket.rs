@@ -3,7 +3,7 @@ use super::*;
 impl<T, I, O, E> Parser<I, O, E> for &T
 where
     T: ?Sized + Parser<I, O, E>,
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     O:Hkt,
 {
@@ -26,7 +26,7 @@ where
 impl<T, I, O, E> ConfigParser<I, O, E> for &T
 where
     T: ?Sized + ConfigParser<I, O, E>,
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
         O:Hkt,
 

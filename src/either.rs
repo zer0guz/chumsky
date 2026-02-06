@@ -6,7 +6,7 @@ use ::either::Either;
 
 impl<L, R, I, O, E> Parser<I, O, E> for Either<L, R>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     L: Parser<I, O, E>,
     R: Parser<I, O, E>, 

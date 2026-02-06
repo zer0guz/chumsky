@@ -9,7 +9,7 @@ impl<'src> InputFor<'src, u8> for Bytes {
 
     type MaybeToken = u8;
 
-    type Cache = Self;
+    type Cache = &'src Self;
 }
 
 impl Input for Bytes {
@@ -18,7 +18,7 @@ impl Input for Bytes {
     type Token = u8;
 
     #[inline]
-    fn begin<'src>(self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+    fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
         (0, self)
     }
 

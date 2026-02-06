@@ -102,7 +102,7 @@ pub trait Input: for<'src> InputFor<'src, Self::Token> {
     /// type (see [`Input::MaybeToken`]).
     type Token;
     /// Create an initial cursor and cache at the start of the input.
-    fn begin<'src>(self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>);
+    fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>);
 
     /// Return the 'location' associated with the given cursor.
     ///
@@ -181,9 +181,11 @@ pub trait Input: for<'src> InputFor<'src, Self::Token> {
     /// an identifier that corresponds to the file the spans originated from.
     ///
     /// Returns spans containing your provided context as the Span::Context
-    fn with_context<S: Span>(self, context: S::Context) -> WithContext<S, Self>
-    where
-        Self: Sized,
+    fn with_context<'src, S: Span>(
+        &'src mut self,
+        context: S::Context,
+    ) -> WithContext<'src, S, Self>
+
     {
         WithContext {
             input: self,
@@ -205,10 +207,10 @@ pub trait Input: for<'src> InputFor<'src, Self::Token> {
     // ///
     // /// Although `MappedInput` does implement [`SliceInput`], please be aware that, as you might anticipate, the slices
     // /// will be those of the original input and not `&[T]`, to avoid the need to copy around sections of the input.
-    fn map<T, S: Span, F>(self, eoi: S, f: F) -> MappedInput<Self, T, S, F>
+    fn map<'src, T, S: Span, F>(&'src mut self, eoi: S, f: F) -> MappedInput<'src, Self, T, S, F>
     where
         Self: Sized,
-        F: for<'any> InputMapper<'any, MaybeTokenOf<'any, Self>, T, S>,
+        F: InputMapper<'src, MaybeTokenOf<'src, Self>, T, S>,
     {
         MappedInput {
             input: self,
@@ -283,10 +285,10 @@ pub trait Input: for<'src> InputFor<'src, Self::Token> {
     ///
     /// This is useful if you wish to include extra context that applies to all spans emitted during a parse, such as
     /// an identifier that corresponds to the file the spans originated from.
-    fn map_span<S: Span, F>(self, map_fn: F) -> MappedSpan<S, Self, F>
+    fn map_span<'src, S: Span, F>(&'src mut self, map_fn: F) -> MappedSpan<'src, S, Self, F>
     where
         Self: Input + Sized,
-        F: for<'src> SpanMapper<'src, Self::Span, S>,
+        F: SpanMapper<'src, Self::Span, S>,
     {
         MappedSpan {
             input: self,
@@ -394,21 +396,20 @@ pub trait BorrowInput: Input {
     ) -> Option<&'src Self::Token>;
 }
 
-
-impl InputFor<'_, char> for &'_ str {
+impl<'src> InputFor<'src, char> for str {
     type Cursor = usize;
 
     type MaybeToken = char;
 
-    type Cache = Self;
+    type Cache = &'src Self;
 }
 
-impl Input for &str {
+impl Input for str {
     type Span = SimpleSpan<usize>;
 
     type Token = char;
     #[inline]
-    fn begin<'src>(self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+    fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
         (0, self)
     }
 
@@ -447,7 +448,7 @@ impl Input for &str {
     }
 }
 
-impl ExactSizeInput for &str {
+impl ExactSizeInput for str {
     #[inline(always)]
     unsafe fn span_from<'src>(
         this: &mut CacheOf<'src, Self>,
@@ -457,7 +458,7 @@ impl ExactSizeInput for &str {
     }
 }
 
-impl ValueInput for &str {
+impl ValueInput for str {
     #[inline(always)]
     unsafe fn next<'src>(
         cache: &mut CacheOf<'src, Self>,
@@ -467,18 +468,18 @@ impl ValueInput for &str {
     }
 }
 
-impl Sealed for &str {}
-impl StrInput for &str {
+impl Sealed for str {}
+impl StrInput for str {
     #[doc(hidden)]
     fn stringify<'src>(slice: SliceOf<'src, Self>) -> String {
         slice.to_string()
     }
 }
-impl<'src> SliceInputFor<'src> for &'_ str {
+impl<'src> SliceInputFor<'src> for str {
     type Slice = &'src str;
 }
 
-impl SliceInput for &str {
+impl SliceInput for str {
     #[inline(always)]
     fn full_slice<'src>(this: &mut CacheOf<'src, Self>) -> SliceOf<'src, Self> {
         (*this).into()
@@ -501,20 +502,20 @@ impl SliceInput for &str {
     }
 }
 
-impl<'src, T> InputFor<'src, T> for &[T] {
+impl<'src, T> InputFor<'src, T> for [T] {
     type Cursor = usize;
 
     type MaybeToken = Ref<'src, T>;
 
-    type Cache = Self;
+    type Cache = &'src Self;
 }
 
-impl<T> Input for &[T] {
+impl<T> Input for [T] {
     type Span = SimpleSpan<usize>;
 
     type Token = T;
     #[inline]
-    fn begin<'src>(self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+    fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
         (0, self)
     }
 
@@ -545,7 +546,7 @@ impl<T> Input for &[T] {
     }
 }
 
-impl<T> ExactSizeInput for &[T] {
+impl<T> ExactSizeInput for [T] {
     #[inline(always)]
     unsafe fn span_from<'src>(
         this: &mut CacheOf<'src, Self>,
@@ -555,8 +556,8 @@ impl<T> ExactSizeInput for &[T] {
     }
 }
 
-impl Sealed for &[u8] {}
-impl StrInput for &[u8] {
+impl Sealed for [u8] {}
+impl StrInput for [u8] {
     #[doc(hidden)]
     fn stringify<'src>(slice: SliceOf<'src, Self>) -> String {
         slice
@@ -566,11 +567,11 @@ impl StrInput for &[u8] {
             .collect()
     }
 }
-impl<'src, T> SliceInputFor<'src> for &[T] {
+impl<'src, T> SliceInputFor<'src> for [T] {
     type Slice = Ref<'src, [T]>;
 }
 
-impl<T> SliceInput for &[T] {
+impl<T> SliceInput for [T] {
     #[inline(always)]
     fn full_slice<'src>(this: &mut CacheOf<'src, Self>) -> SliceOf<'src, Self>
     where
@@ -602,7 +603,7 @@ impl<T> SliceInput for &[T] {
     }
 }
 
-impl<T: Clone> ValueInput for &[T] {
+impl<T: Clone> ValueInput for [T] {
     #[inline(always)]
     unsafe fn next<'src>(
         this: &mut CacheOf<'src, Self>,
@@ -614,7 +615,7 @@ impl<T: Clone> ValueInput for &[T] {
     }
 }
 
-impl<T> BorrowInput for &[T] {
+impl<T> BorrowInput for [T] {
     #[inline(always)]
     unsafe fn next_ref<'src>(
         this: &mut CacheOf<'src, Self>,
@@ -624,20 +625,20 @@ impl<T> BorrowInput for &[T] {
     }
 }
 
-impl<'src, T, const N: usize> InputFor<'src, T> for &'_ [T; N] {
+impl<'src, T, const N: usize> InputFor<'src, T> for [T; N] {
     type Cursor = usize;
 
     type MaybeToken = Ref<'src, T>;
 
-    type Cache = Self;
+    type Cache = &'src Self;
 }
 
-impl<T, const N: usize> Input for &[T; N] {
+impl<T, const N: usize> Input for [T; N] {
     type Span = SimpleSpan<usize>;
 
     type Token = T;
     #[inline]
-    fn begin<'src>(self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+    fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
         (0, self)
     }
 
@@ -668,7 +669,7 @@ impl<T, const N: usize> Input for &[T; N] {
     }
 }
 
-impl<T, const N: usize> ExactSizeInput for &[T; N] {
+impl<T, const N: usize> ExactSizeInput for [T; N] {
     #[inline(always)]
     unsafe fn span_from<'src>(
         this: &mut CacheOf<'src, Self>,
@@ -678,8 +679,8 @@ impl<T, const N: usize> ExactSizeInput for &[T; N] {
     }
 }
 
-impl<const N: usize> Sealed for &[u8; N] {}
-impl<const N: usize> StrInput for &[u8; N] {
+impl<const N: usize> Sealed for [u8; N] {}
+impl<const N: usize> StrInput for [u8; N] {
     #[doc(hidden)]
     fn stringify<'src>(slice: SliceOf<'src, Self>) -> String {
         slice
@@ -690,11 +691,11 @@ impl<const N: usize> StrInput for &[u8; N] {
     }
 }
 
-impl<'src, T, const N: usize> SliceInputFor<'src> for &[T; N] {
+impl<'src, T, const N: usize> SliceInputFor<'src> for [T; N] {
     type Slice = Ref<'src, [T]>;
 }
 
-impl<T, const N: usize> SliceInput for &[T; N] {
+impl<T, const N: usize> SliceInput for [T; N] {
     #[inline(always)]
     fn full_slice<'src>(this: &mut CacheOf<'src, Self>) -> SliceOf<'src, Self>
     where
@@ -726,7 +727,7 @@ impl<T, const N: usize> SliceInput for &[T; N] {
     }
 }
 
-impl<T: Clone, const N: usize> ValueInput for &[T; N] {
+impl<T: Clone, const N: usize> ValueInput for [T; N] {
     #[inline(always)]
     unsafe fn next<'src>(
         this: &mut CacheOf<'src, Self>,
@@ -736,7 +737,7 @@ impl<T: Clone, const N: usize> ValueInput for &[T; N] {
     }
 }
 
-impl<T, const N: usize> BorrowInput for &[T; N] {
+impl<T, const N: usize> BorrowInput for [T; N] {
     #[inline(always)]
     unsafe fn next_ref<'src>(
         this: &mut CacheOf<'src, Self>,
@@ -771,10 +772,11 @@ where
 /// See [`Input::map`].
 #[derive(Clone, Copy)]
 pub struct MappedInput<
-    I: Input,
+    'src,
+    I: Input + ?Sized,
     T,
     S,
-    M = for<'src> fn(
+    M = fn(
         MaybeTokenOf<'src, I>,
         &'src (),
     ) -> (
@@ -782,165 +784,165 @@ pub struct MappedInput<
         <MaybeTokenOf<'src, I> as IntoMaybe<'src, <I as Input>::Token>>::Proj<S>,
     ),
 > {
-    input: I,
+    input: &'src I,
     eoi: S,
     mapper: M,
     _tok: EmptyPhantom<T>,
 }
 
-impl<'src, I, M, T, S: Span> InputFor<'src, T> for MappedInput<I, T, S, M>
-where
-    I: Input,
-    M: for<'any> InputMapper<'any, MaybeTokenOf<'any, I>, T, S>,
-{
-    type MaybeToken = <MaybeTokenOf<'src, I> as IntoMaybe<'src, I::Token>>::Proj<T>;
+// impl<'src, I, M, T, S: Span> InputFor<'src, T> for MappedInput<I, T, S, M>
+// where
+//     I: Input + ?Sized,
+//     M: for<'any> InputMapper<'any, MaybeTokenOf<'any, I>, T, S>,
+// {
+//     type MaybeToken = <MaybeTokenOf<'src, I> as IntoMaybe<'src, I::Token>>::Proj<T>;
 
-    type Cursor = (CursorOf<'src, I>, Option<S::Offset>);
-    type Cache = (CacheOf<'src, I>, M, S);
-}
+//     type Cursor = (CursorOf<'src, I>, Option<S::Offset>);
+//     type Cache = (CacheOf<'src, I>, M, S);
+// }
 
-impl<I, T, S, F> Input for MappedInput<I, T, S, F>
-where
-    I: Input,
-    F: for<'any> InputMapper<
-            'any,
-            MaybeTokenOf<'any, I>,
-            T,
-            S,
-            OutputToken = <MaybeTokenOf<'any, I> as IntoMaybe<'any, I::Token>>::Proj<T>,
-            OutputSpan = <MaybeTokenOf<'any, I> as IntoMaybe<'any, I::Token>>::Proj<S>,
-        >,
-    S: Span,
-{
-    type Span = S;
+// impl<I, T, S, F> Input for MappedInput<I, T, S, F>
+// where
+//     I: Input + ?Sized,
+//     F: for<'any> InputMapper<
+//             'any,
+//             MaybeTokenOf<'any, I>,
+//             T,
+//             S,
+//             OutputToken = <MaybeTokenOf<'any, I> as IntoMaybe<'any, I::Token>>::Proj<T>,
+//             OutputSpan = <MaybeTokenOf<'any, I> as IntoMaybe<'any, I::Token>>::Proj<S>,
+//         >,
+//     S: Span,
+// {
+//     type Span = S;
 
-    type Token = T;
-    #[inline]
-    fn begin<'src>(self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
-        let (cursor, cache) = self.input.begin();
-        ((cursor, None), (cache, self.mapper, self.eoi))
-    }
+//     type Token = T;
+//     #[inline]
+//     fn begin<'src>(&'src self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+//         let (cursor, cache) = self.input.begin();
+//         ((cursor, None), (cache, self.mapper, self.eoi))
+//     }
 
-    #[inline]
-    fn cursor_location<'src>(cursor: &CursorOf<'src, Self>) -> usize {
-        I::cursor_location(&cursor.0)
-    }
+//     #[inline]
+//     fn cursor_location<'src>(cursor: &CursorOf<'src, Self>) -> usize {
+//         I::cursor_location(&cursor.0)
+//     }
 
-    unsafe fn next_maybe<'src>(
-        (cache, mapper, _): &mut CacheOf<'src, Self>,
-        cursor: &mut CursorOf<'src, Self>,
-    ) -> Option<MaybeTokenOf<'src, Self>> {
-        unsafe {
-            I::next_maybe(cache, &mut cursor.0).map(|tok| {
-                let (tok, span) = mapper(tok, &());
-                cursor.1 = Some(span.borrow().end());
-                tok
-            })
-        }
-    }
+//     unsafe fn next_maybe<'src>(
+//         (cache, mapper, _): &mut CacheOf<'src, Self>,
+//         cursor: &mut CursorOf<'src, Self>,
+//     ) -> Option<MaybeTokenOf<'src, Self>> {
+//         unsafe {
+//             I::next_maybe(cache, &mut cursor.0).map(|tok| {
+//                 let (tok, span) = mapper(tok, &());
+//                 cursor.1 = Some(span.borrow().end());
+//                 tok
+//             })
+//         }
+//     }
 
-    #[inline]
-    unsafe fn span<'src>(
-        (cache, mapper, eoi): &mut CacheOf<'src, Self>,
-        range: Range<&CursorOf<'src, Self>>,
-    ) -> Self::Span {
-        match unsafe { I::next_maybe(cache, &mut range.start.0.clone()) } {
-            Some(tok) => {
-                let start = mapper(tok, &()).1.borrow().start();
-                let end = range.end.1.clone().unwrap_or_else(|| eoi.end());
-                S::new(eoi.context(), start..end)
-            }
-            None => S::new(eoi.context(), eoi.end()..eoi.end()),
-        }
-    }
-}
+//     #[inline]
+//     unsafe fn span<'src>(
+//         (cache, mapper, eoi): &mut CacheOf<'src, Self>,
+//         range: Range<&CursorOf<'src, Self>>,
+//     ) -> Self::Span {
+//         match unsafe { I::next_maybe(cache, &mut range.start.0.clone()) } {
+//             Some(tok) => {
+//                 let start = mapper(tok, &()).1.borrow().start();
+//                 let end = range.end.1.clone().unwrap_or_else(|| eoi.end());
+//                 S::new(eoi.context(), start..end)
+//             }
+//             None => S::new(eoi.context(), eoi.end()..eoi.end()),
+//         }
+//     }
+// }
 
-impl<T, S, I, M> ExactSizeInput for MappedInput<I, T, S, M>
-where
-    I: ExactSizeInput,
-    S: Span + Clone,
-    M: for<'src> InputMapper<
-            'src,
-            MaybeTokenOf<'src, I>,
-            T,
-            S,
-            OutputToken = <MaybeTokenOf<'src, I> as IntoMaybe<'src, I::Token>>::Proj<T>,
-            OutputSpan = <MaybeTokenOf<'src, I> as IntoMaybe<'src, I::Token>>::Proj<S>,
-        >,
-{
-    #[inline(always)]
-    unsafe fn span_from<'src>(
-        (cache, mapper, eoi): &mut CacheOf<'src, Self>,
-        range: RangeFrom<&CursorOf<'src, Self>>,
-    ) -> Self::Span {
-        let start = unsafe {
-            I::next_maybe(cache, &mut range.start.0.clone())
-                .map(|tok| mapper(tok, &()).1.borrow().start())
-                .unwrap_or_else(|| eoi.end())
-        };
-        S::new(eoi.context(), start..eoi.end())
-    }
-}
+// impl<T, S, I, M> ExactSizeInput for MappedInput<I, T, S, M>
+// where
+//     I: ExactSizeInput,
+//     S: Span + Clone,
+//     M: for<'src> InputMapper<
+//             'src,
+//             MaybeTokenOf<'src, I>,
+//             T,
+//             S,
+//             OutputToken = <MaybeTokenOf<'src, I> as IntoMaybe<'src, I::Token>>::Proj<T>,
+//             OutputSpan = <MaybeTokenOf<'src, I> as IntoMaybe<'src, I::Token>>::Proj<S>,
+//         >,
+// {
+//     #[inline(always)]
+//     unsafe fn span_from<'src>(
+//         (cache, mapper, eoi): &mut CacheOf<'src, Self>,
+//         range: RangeFrom<&CursorOf<'src, Self>>,
+//     ) -> Self::Span {
+//         let start = unsafe {
+//             I::next_maybe(cache, &mut range.start.0.clone())
+//                 .map(|tok| mapper(tok, &()).1.borrow().start())
+//                 .unwrap_or_else(|| eoi.end())
+//         };
+//         S::new(eoi.context(), start..eoi.end())
+//     }
+// }
 
-impl<T, S, I, M> ValueInput for MappedInput<I, T, S, M>
-where
-    I: ValueInput,
-    S: Span + Clone,
-    M: for<'src> InputMapper<
-            'src,
-            MaybeTokenOf<'src, I>,
-            T,
-            S,
-            OutputToken = <MaybeTokenOf<'src, I> as IntoMaybe<'src, I::Token>>::Proj<T>,
-            OutputSpan = <MaybeTokenOf<'src, I> as IntoMaybe<'src, I::Token>>::Proj<S>,
-        >,
-    S: Span,
-    T: Clone,
-{
-    #[inline(always)]
-    unsafe fn next<'src>(
-        (cache, mapper, _): &mut CacheOf<'src, Self>,
-        cursor: &mut CursorOf<'src, Self>,
-    ) -> Option<Self::Token> {
-        unsafe {
-            I::next_maybe(cache, &mut cursor.0).map(|tok| {
-                let (tok, span) = mapper(tok, &());
-                cursor.1 = Some(span.borrow().end());
-                tok.borrow().clone()
-            })
-        }
-    }
-}
+// impl<T, S, I, M> ValueInput for MappedInput<I, T, S, M>
+// where
+//     I: ValueInput,
+//     S: Span + Clone,
+//     M: for<'src> InputMapper<
+//             'src,
+//             MaybeTokenOf<'src, I>,
+//             T,
+//             S,
+//             OutputToken = <MaybeTokenOf<'src, I> as IntoMaybe<'src, I::Token>>::Proj<T>,
+//             OutputSpan = <MaybeTokenOf<'src, I> as IntoMaybe<'src, I::Token>>::Proj<S>,
+//         >,
+//     S: Span,
+//     T: Clone,
+// {
+//     #[inline(always)]
+//     unsafe fn next<'src>(
+//         (cache, mapper, _): &mut CacheOf<'src, Self>,
+//         cursor: &mut CursorOf<'src, Self>,
+//     ) -> Option<Self::Token> {
+//         unsafe {
+//             I::next_maybe(cache, &mut cursor.0).map(|tok| {
+//                 let (tok, span) = mapper(tok, &());
+//                 cursor.1 = Some(span.borrow().end());
+//                 tok.borrow().clone()
+//             })
+//         }
+//     }
+// }
 
-impl<T, S, I, M> BorrowInput for MappedInput<I, T, S, M>
-where
-    I: Input + BorrowInput,
-    for<'src> MaybeTokenOf<'src, I>: From<Ref<'src, I::Token>>,
-    for<'src> MaybeTokenOf<'src, Self>: Into<Ref<'src, Self::Token>>,
-    S: Span + Clone,
-    M: for<'src> InputMapper<
-            'src,
-            MaybeTokenOf<'src, I>,
-            T,
-            S,
-            OutputToken = <MaybeTokenOf<'src, I> as IntoMaybe<'src, I::Token>>::Proj<T>,
-            OutputSpan = <MaybeTokenOf<'src, I> as IntoMaybe<'src, I::Token>>::Proj<S>,
-        >,
-{
-    #[inline(always)]
-    unsafe fn next_ref<'src>(
-        (cache, mapper, _): &mut CacheOf<'src, Self>,
-        cursor: &mut CursorOf<'src, Self>,
-    ) -> Option<&'src Self::Token> {
-        unsafe {
-            I::next_ref(cache, &mut cursor.0).map(|tok| {
-                let (tok, span) = mapper(Ref::from(tok).into(), &());
-                cursor.1 = Some(span.borrow().end());
-                tok.into().into_ref()
-            })
-        }
-    }
-}
+// impl<T, S, I, M> BorrowInput for MappedInput<I, T, S, M>
+// where
+//     I: Input + BorrowInput,
+//     for<'src> MaybeTokenOf<'src, I>: From<Ref<'src, I::Token>>,
+//     for<'src> MaybeTokenOf<'src, Self>: Into<Ref<'src, Self::Token>>,
+//     S: Span + Clone,
+//     M: for<'src> InputMapper<
+//             'src,
+//             MaybeTokenOf<'src, I>,
+//             T,
+//             S,
+//             OutputToken = <MaybeTokenOf<'src, I> as IntoMaybe<'src, I::Token>>::Proj<T>,
+//             OutputSpan = <MaybeTokenOf<'src, I> as IntoMaybe<'src, I::Token>>::Proj<S>,
+//         >,
+// {
+//     #[inline(always)]
+//     unsafe fn next_ref<'src>(
+//         (cache, mapper, _): &mut CacheOf<'src, Self>,
+//         cursor: &mut CursorOf<'src, Self>,
+//     ) -> Option<&'src Self::Token> {
+//         unsafe {
+//             I::next_ref(cache, &mut cursor.0).map(|tok| {
+//                 let (tok, span) = mapper(Ref::from(tok).into(), &());
+//                 cursor.1 = Some(span.borrow().end());
+//                 tok.into().into_ref()
+//             })
+//         }
+//     }
+// }
 // impl<'src, T, S, I, M> SliceInputFor<'src> for MappedInput<I, T, S, M>
 // where
 //     S: Span,
@@ -998,16 +1000,15 @@ where
 
 /// An input wrapper that maps the span type of your input
 /// into your custom span [`Input::map_span`].
-#[derive(Copy, Clone)]
-pub struct MappedSpan<S: Span, I, F> {
-    input: I,
+pub struct MappedSpan<'src, S: Span, I: ?Sized, F> {
+    input: &'src mut I,
     map_fn: F,
     phantom: PhantomData<S>,
 }
 
-impl<'src, I, S, F> InputFor<'src, I::Token> for MappedSpan<S, I, F>
+impl<'src, I, S, F> InputFor<'src, I::Token> for MappedSpan<'_, S, I, F>
 where
-    I: Input,
+    I: Input + ?Sized,
     F: for<'any> SpanMapper<'any, I::Span, S>,
     S: Span,
 {
@@ -1015,10 +1016,10 @@ where
 
     type Cursor = CursorOf<'src, I>;
 
-    type Cache = (CacheOf<'src, I>, F);
+    type Cache = (CacheOf<'src, I>, &'src F);
 }
 
-impl<S, I: Input, F> Input for MappedSpan<S, I, F>
+impl<S, I: Input + ?Sized, F> Input for MappedSpan<'_, S, I, F>
 where
     S: Span + Clone,
     S::Context: Clone,
@@ -1029,9 +1030,9 @@ where
 
     type Token = I::Token;
     #[inline(always)]
-    fn begin<'src>(self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+    fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
         let (cursor, cache) = self.input.begin();
-        (cursor, (cache, self.map_fn))
+        (cursor, (cache, &self.map_fn))
     }
 
     #[inline]
@@ -1057,7 +1058,7 @@ where
     }
 }
 
-impl<S, I: Input, F> ExactSizeInput for MappedSpan<S, I, F>
+impl<S, I, F> ExactSizeInput for MappedSpan<'_, S, I, F>
 where
     I: ExactSizeInput,
     S: Span + Clone,
@@ -1075,7 +1076,7 @@ where
     }
 }
 
-impl<S, I: ValueInput, F> ValueInput for MappedSpan<S, I, F>
+impl<S, I: ValueInput, F> ValueInput for MappedSpan<'_, S, I, F>
 where
     S: Span + Clone,
     S::Context: Clone,
@@ -1091,7 +1092,7 @@ where
     }
 }
 
-impl<S, I: BorrowInput, F> BorrowInput for MappedSpan<S, I, F>
+impl<S, I: BorrowInput, F> BorrowInput for MappedSpan<'_, S, I, F>
 where
     S: Span + Clone,
     S::Context: Clone,
@@ -1107,11 +1108,11 @@ where
     }
 }
 
-impl<'src, S: Span, I: SliceInput, F> SliceInputFor<'src> for MappedSpan<S, I, F> {
+impl<'src, S: Span, I: SliceInput, F> SliceInputFor<'src> for MappedSpan<'_, S, I, F> {
     type Slice = SliceOf<'src, I>;
 }
 
-impl<S, I, F> SliceInput for MappedSpan<S, I, F>
+impl<S, I, F> SliceInput for MappedSpan<'_, S, I, F>
 where
     I: SliceInput,
     S: Span + Clone,
@@ -1150,16 +1151,16 @@ where
     }
 }
 
-impl<'src, S, I, F: 'src> Sealed for MappedSpan<S, I, F>
+impl<'src, S, I, F: 'src> Sealed for MappedSpan<'_, S, I, F>
 where
-    I: Input,
+    I: Input + ?Sized,
     S: Span + Clone,
     S::Context: Clone,
     for<'any> S::Offset: From<<I::Span as Span>::Offset>,
     F: for<'any> SpanMapper<'any, I::Span, S>,
 {
 }
-impl<S, I, F> StrInput for MappedSpan<S, I, F>
+impl<S, I, F> StrInput for MappedSpan<'_, S, I, F>
 where
     I: StrInput,
     S: Span + Clone,
@@ -1176,36 +1177,40 @@ where
 
 /// An input wrapper that returns a custom span, with the user-defined context
 /// contained in the Span::Context. See [`Input::with_context`].
-#[derive(Copy, Clone)]
-pub struct WithContext<S: Span, I> {
-    input: I,
+pub struct WithContext<'src, S: Span, I: ?Sized> {
+    input: &'src mut I,
     context: S::Context,
     #[allow(dead_code)]
     phantom: EmptyPhantom<S>,
 }
 
-impl<'src, I: Input, S: Span> InputFor<'src, I::Token> for WithContext<S, I> {
+impl<'src, I, S> InputFor<'src, I::Token> for WithContext<'_, S, I>
+where
+    I: Input + ?Sized,
+    S: Span,
+{
     type Cursor = CursorOf<'src, I>;
 
     type MaybeToken = MaybeTokenOf<'src, I>;
 
-    type Cache = (CacheOf<'src, I>, S::Context);
+    type Cache = (CacheOf<'src, I>, &'src mut S::Context);
 }
 
-impl<S, I: Input> Input for WithContext<S, I>
+impl<S, I> Input for WithContext<'_, S, I>
 where
     S: Span + Clone,
     S::Context: Clone,
     S::Offset: From<<I::Span as Span>::Offset>,
+    I: Input + ?Sized,
 {
     type Span = S;
 
     type Token = I::Token;
 
     #[inline(always)]
-    fn begin<'src>(self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+    fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
         let (cursor, cache) = self.input.begin();
-        (cursor, (cache, self.context))
+        (cursor, (cache, &mut self.context))
     }
 
     #[inline]
@@ -1234,9 +1239,9 @@ where
     }
 }
 
-impl<S, I: Input> ExactSizeInput for WithContext<S, I>
+impl<S, I: Input> ExactSizeInput for WithContext<'_, S, I>
 where
-    I: ExactSizeInput,
+    I: ExactSizeInput + ?Sized,
     S: Span + Clone,
     S::Context: Clone,
     S::Offset: for<'src> From<<I::Span as Span>::Offset>,
@@ -1254,11 +1259,12 @@ where
     }
 }
 
-impl<S, I: ValueInput> ValueInput for WithContext<S, I>
+impl<S, I> ValueInput for WithContext<'_, S, I>
 where
     S: Span + Clone,
     S::Context: Clone,
     for<'src> S::Offset: From<<I::Span as Span>::Offset>,
+    I: ValueInput + ?Sized,
 {
     #[inline(always)]
     unsafe fn next<'src>(
@@ -1269,7 +1275,7 @@ where
     }
 }
 
-impl<S, I: BorrowInput> BorrowInput for WithContext<S, I>
+impl<S, I: BorrowInput> BorrowInput for WithContext<'_, S, I>
 where
     S: Span + Clone,
     S::Context: Clone,
@@ -1284,15 +1290,20 @@ where
     }
 }
 
-impl<'src, S: Span, I: SliceInput> SliceInputFor<'src> for WithContext<S, I> {
+impl<'src, S, I> SliceInputFor<'src> for WithContext<'_, S, I>
+where
+    S: Span,
+    I: SliceInput + ?Sized,
+{
     type Slice = SliceOf<'src, I>;
 }
 
-impl<S, I: SliceInput> SliceInput for WithContext<S, I>
+impl<S, I> SliceInput for WithContext<'_, S, I>
 where
     S: Span + Clone,
     S::Context: Clone,
     S::Offset: From<<I::Span as Span>::Offset>,
+    I: SliceInput + ?Sized,
 {
     #[inline(always)]
     fn full_slice<'src>((cache, _): &mut CacheOf<'src, Self>) -> SliceOf<'src, Self>
@@ -1325,9 +1336,9 @@ where
     }
 }
 
-impl<S: Span, I> Sealed for WithContext<S, I> {}
+impl<S: Span, I> Sealed for WithContext<'_, S, I> {}
 
-impl<S, I> StrInput for WithContext<S, I>
+impl<S, I> StrInput for WithContext<'_, S, I>
 where
     I: StrInput,
     S: Span + Clone,
@@ -1362,12 +1373,12 @@ impl<R: Read + Seek> IoInput<R> {
     }
 }
 
-impl<R: Read + Seek> InputFor<'_, u8> for IoInput<R> {
+impl<'src, R: Read + Seek> InputFor<'src, u8> for IoInput<R> {
     type Cursor = usize;
 
     type MaybeToken = u8;
 
-    type Cache = Self;
+    type Cache = &'src mut Self;
 }
 
 #[cfg(feature = "std")]
@@ -1375,7 +1386,7 @@ impl<R: Read + Seek> Input for IoInput<R> {
     type Span = SimpleSpan;
 
     type Token = u8;
-    fn begin<'src>(self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+    fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
         (0, self)
     }
 
@@ -1433,14 +1444,14 @@ impl<R: Read + Seek> ValueInput for IoInput<R> {
 /// Represents a location in an input that can be rewound to.
 ///
 /// Checkpoints can be created with [`InputRef::save`] and rewound to with [`InputRef::rewind`].
-pub struct Checkpoint<'src, 'parse, I: Input, C> {
+pub struct Checkpoint<'src, 'parse, I: Input + ?Sized, C> {
     cursor: Cursor<'src, 'parse, I>,
     pub(crate) err_count: usize,
     pub(crate) inspector: C,
     phantom: PhantomData<fn(&'parse ()) -> &'parse ()>, // Invariance
 }
 
-impl<'src, 'parse, I: Input, C> Checkpoint<'src, 'parse, I, C> {
+impl<'src, 'parse, I: Input + ?Sized, C> Checkpoint<'src, 'parse, I, C> {
     /// Get the [`Cursor`] that this checkpoint corresponds to.
     pub fn cursor(&self) -> &Cursor<'src, 'parse, I> {
         &self.cursor
@@ -1452,7 +1463,7 @@ impl<'src, 'parse, I: Input, C> Checkpoint<'src, 'parse, I, C> {
     }
 }
 
-impl<'src, I: Input, C: Clone> Clone for Checkpoint<'src, '_, I, C> {
+impl<'src, I: Input + ?Sized, C: Clone> Clone for Checkpoint<'src, '_, I, C> {
     #[inline(always)]
     fn clone(&self) -> Self {
         Self {
@@ -1468,19 +1479,19 @@ impl<'src, I: Input, C: Clone> Clone for Checkpoint<'src, '_, I, C> {
 ///
 /// If you to rewind to an old input location, see [`Checkpoint`].
 #[repr(transparent)]
-pub struct Cursor<'src, 'parse, I: Input> {
+pub struct Cursor<'src, 'parse, I: Input + ?Sized> {
     pub(crate) inner: CursorOf<'src, I>,
     phantom: PhantomData<fn(&'parse ()) -> &'parse ()>, // Invariance
 }
 
-impl<'src, I: Input> Cursor<'src, '_, I> {
+impl<'src, I: Input + ?Sized> Cursor<'src, '_, I> {
     /// Get the input's internal cursor.
     pub fn inner(&self) -> &CursorOf<'src, I> {
         &self.inner
     }
 }
 
-impl<I: Input> Clone for Cursor<'_, '_, I> {
+impl<I: Input + ?Sized> Clone for Cursor<'_, '_, I> {
     #[inline(always)]
     fn clone(&self) -> Self {
         Self {
@@ -1490,8 +1501,8 @@ impl<I: Input> Clone for Cursor<'_, '_, I> {
     }
 }
 
-impl<I: Input> Eq for Cursor<'_, '_, I> {}
-impl<I: Input> PartialEq for Cursor<'_, '_, I> {
+impl<I: Input + ?Sized> Eq for Cursor<'_, '_, I> {}
+impl<I: Input + ?Sized> PartialEq for Cursor<'_, '_, I> {
     fn eq(&self, other: &Self) -> bool {
         I::cursor_location(&self.inner)
             .cmp(&I::cursor_location(&other.inner))
@@ -1499,13 +1510,13 @@ impl<I: Input> PartialEq for Cursor<'_, '_, I> {
     }
 }
 
-impl<I: Input> PartialOrd for Cursor<'_, '_, I> {
+impl<I: Input + ?Sized> PartialOrd for Cursor<'_, '_, I> {
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<I: Input> Ord for Cursor<'_, '_, I> {
+impl<I: Input + ?Sized> Ord for Cursor<'_, '_, I> {
     fn cmp(&self, other: &Self) -> Ordering {
         I::cursor_location(&self.inner).cmp(&I::cursor_location(&other.inner))
     }
@@ -1535,7 +1546,7 @@ impl<T, E> Default for Errors<T, E> {
 
 /// Internal type representing the owned parts of an input - used at the top level by a call to
 /// `parse`.
-pub(crate) struct InputOwn<'src, 's, I: Input, E: ParserExtra<I>> {
+pub(crate) struct InputOwn<'src, 's, I: Input + ?Sized, E: ParserExtra<I>> {
     pub(crate) start: CursorOf<'src, I>,
     pub(crate) cache: CacheOf<'src, I>,
     pub(crate) errors: Errors<CursorOf<'src, I>, ErrOfEx<'src, I, E>>,
@@ -1548,12 +1559,12 @@ pub(crate) struct InputOwn<'src, 's, I: Input, E: ParserExtra<I>> {
 
 impl<'src, 's, I, E> InputOwn<'src, 's, I, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     I::Token: IntoMaybe<'src, I::Token>,
 {
     #[cfg_attr(not(test), allow(dead_code))]
-    pub(crate) fn new(input: I) -> InputOwn<'src, 's, I, E>
+    pub(crate) fn new(input: &'src mut I) -> InputOwn<'src, 's, I, E>
     where
         E::State: Default,
         CtxOf<'src, I, E>: Default,
@@ -1570,7 +1581,7 @@ where
         }
     }
 
-    pub(crate) fn new_state(input: I, state: &'s mut E::State) -> InputOwn<'src, 's, I, E>
+    pub(crate) fn new_state(input: &'src mut I, state: &'s mut E::State) -> InputOwn<'src, 's, I, E>
     where
         CtxOf<'src, I, E>: Default,
     {
@@ -1608,7 +1619,7 @@ where
 }
 
 /// Internal type representing an input as well as all the necessary context for parsing.
-pub struct InputRef<'src, 'parse, I: Input, E: ParserExtra<I>> {
+pub struct InputRef<'src, 'parse, I: Input + ?Sized, E: ParserExtra<I>> {
     cursor: CursorOf<'src, I>,
     pub(crate) cache: &'parse mut CacheOf<'src, I>,
     pub(crate) errors: &'parse mut Errors<CursorOf<'src, I>, ErrOfEx<'src, I, E>>,
@@ -1621,7 +1632,7 @@ pub struct InputRef<'src, 'parse, I: Input, E: ParserExtra<I>> {
     >,
 }
 
-impl<'src, 'parse, I: Input, E: ParserExtra<I>> InputRef<'src, 'parse, I, E>
+impl<'src, 'parse, I: Input + ?Sized, E: ParserExtra<I>> InputRef<'src, 'parse, I, E>
 where
     I::Token: IntoMaybe<'src, I::Token>,
 {
@@ -2083,7 +2094,7 @@ where
     }
 
     #[inline]
-    pub(crate) fn fail_rewind_with<D: Driver, Exp, O: Hkt,L>(
+    pub(crate) fn fail_rewind_with<D: Driver, Exp, O: Hkt, L>(
         &mut self,
         checkpoint: input::Checkpoint<'src, 'parse, I, <E::State as Inspector<I>>::Checkpoint>,
         mk: impl FnOnce(&mut Self, &I::Span) -> (Exp, Option<MaybeRef<'src, I::Token>>),
@@ -2231,7 +2242,7 @@ impl<E> Emitter<E> {
 }
 
 /// See [`Parser::map_with`].
-pub struct MapExtra<'src, 'b, I: Input, E: ParserExtra<I>> {
+pub struct MapExtra<'src, 'b, I: Input + ?Sized, E: ParserExtra<I>> {
     before: &'b CursorOf<'src, I>,
     after: &'b CursorOf<'src, I>,
     cache: &'b mut CacheOf<'src, I>,
@@ -2240,7 +2251,7 @@ pub struct MapExtra<'src, 'b, I: Input, E: ParserExtra<I>> {
     emitted: &'b mut Errors<CursorOf<'src, I>, ErrOfEx<'src, I, E>>,
 }
 
-impl<'src, 'b, I: Input, E: ParserExtra<I>> MapExtra<'src, 'b, I, E> {
+impl<'src, 'b, I: Input + ?Sized, E: ParserExtra<I>> MapExtra<'src, 'b, I, E> {
     #[inline(always)]
     pub(crate) fn new<'parse>(
         before: &'b Cursor<'src, 'parse, I>,

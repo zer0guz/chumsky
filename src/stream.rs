@@ -71,7 +71,7 @@ impl<'src, I: Iterator> InputFor<'src, I::Item> for Stream<I> {
 
     type Cursor = usize;
 
-    type Cache = Self;
+    type Cache = &'src mut Self;
 }
 
 impl<I: Iterator> Input for Stream<I>
@@ -82,7 +82,7 @@ where
 
     type Token = I::Item;
     #[inline(always)]
-    fn begin<'src>(self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+    fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
         (0, self)
     }
 
@@ -148,15 +148,15 @@ where
 /// This input type supports rewinding by [`Clone`]-ing the iterator. It is recommended that your iterator is very
 /// cheap to clone. If this is not the case, consider using [`Stream`] instead, which caches generated tokens
 /// internally.
-pub struct IterInput<I, S, T> {
+pub struct IterInput<'src,I, S, T> {
     iter: I,
-    eoi: S,
+    eoi: &'src S,
     _t: EmptyPhantom<T>,
 }
 
-impl<I, S, T> IterInput<I, S, T> {
+impl<'src,I, S, T> IterInput<'src,I, S, T> {
     /// Create a new [`IterInput`] with the given iterator, and end of input span.
-    pub fn new(iter: I, eoi: S) -> Self {
+    pub fn new(iter: I, eoi: &'src S) -> Self {
         Self {
             iter,
             eoi,
@@ -165,7 +165,7 @@ impl<I, S, T> IterInput<I, S, T> {
     }
 }
 
-impl<'src, I, S: Span, T> InputFor<'src, T> for IterInput<I, S, T>
+impl<'src, I, S: Span, T> InputFor<'src, T> for IterInput<'_,I, S, T>
 where
     I: Iterator<Item = (T, S)> + Clone,
 {
@@ -173,10 +173,10 @@ where
 
     type MaybeToken = T;
 
-    type Cache = S; // eoi
+    type Cache = &'src S; // eoi
 }
 
-impl<I, T, S> Input for IterInput<I, S, T>
+impl<I, T, S> Input for IterInput<'_,I, S, T>
 where
     S: Span,
     I: Iterator<Item = (T, S)> + Clone,
@@ -185,8 +185,8 @@ where
 
     type Token = T;
     #[inline]
-    fn begin<'src>(self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
-        ((self.iter, 0, None), self.eoi)
+    fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+        ((self.iter.clone(), 0, None), self.eoi)
     }
 
     #[inline]
@@ -227,7 +227,7 @@ where
 //     }
 // }
 
-impl<I, T, S> ValueInput for IterInput<I, S, T>
+impl<I, T, S> ValueInput for IterInput<'_,I, S, T>
 where
     I: Iterator<Item = (T, S)> + Clone,
     S: Span,

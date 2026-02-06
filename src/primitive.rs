@@ -24,13 +24,13 @@ use crate::{
 use super::*;
 
 /// See [`end`].
-pub struct End<I, E>(EmptyPhantom<(E, I)>);
+pub struct End<I: ?Sized, E>(PhantomData<(E, I)>);
 
 /// A parser that accepts only the end of input.
 ///
 /// The output type of this parser is `()`.
-pub const fn end<'src, I: Input + 'src, E: ParserExtra<I>>() -> End<I, E> {
-    End(EmptyPhantom::new())
+pub const fn end<'src, I: Input + ?Sized, E: ParserExtra<I>>() -> End<I, E> {
+    End(PhantomData)
 }
 
 impl<I, E> Copy for End<I, E> {}
@@ -42,7 +42,7 @@ impl<I, E> Clone for End<I, E> {
 
 impl<I, E> Parser<I, (), E> for End<I, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
 {
     #[inline]
@@ -60,12 +60,12 @@ where
 }
 
 /// See [`empty`].
-pub struct Empty<I, E>(EmptyPhantom<(E, I)>);
+pub struct Empty<I:?Sized, E>(EmptyPhantom<(E, I)>);
 
 /// A parser that parses no inputs.
 ///
 /// The output type of this parser is `()`.
-pub const fn empty<I, E>() -> Empty<I, E> {
+pub const fn empty<I:?Sized, E>() -> Empty<I, E> {
     Empty(EmptyPhantom::new())
 }
 
@@ -78,7 +78,7 @@ impl<I, E> Clone for Empty<I, E> {
 
 impl<I, E> Parser<I, (), E> for Empty<I, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
 {
     #[inline]
@@ -111,7 +111,7 @@ impl<T> Default for JustCfg<T> {
 }
 
 /// See [`just`].
-pub struct Just<T, I, E = EmptyErr> {
+pub struct Just<T, I:?Sized, E = EmptyErr> {
     seq: T,
     #[allow(dead_code)]
     phantom: EmptyPhantom<(E, I)>,
@@ -145,7 +145,7 @@ impl<T: Clone, I, E> Clone for Just<T, I, E> {
 /// ```
 pub const fn just<T, I, E>(seq: T) -> Just<T, I, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     I::Token: PartialEq,
     T: for<'src> OrderedSeq<'src, I::Token> + Clone,
@@ -156,9 +156,9 @@ where
     }
 }
 
-impl<I, E, T> Parser<I, I, E> for Just<T, I, E>
+impl<I, E, T> Parser<I, Id<T>, E> for Just<T, I, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     I::Token: PartialEq,
     T: for<'src> OrderedSeq<'src, I::Token> + Clone,
@@ -179,7 +179,7 @@ where
 
 impl<I, E, T> ConfigParser<I, Id<T>, E> for Just<T, I, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     I::Token: PartialEq,
     T: for<'src> OrderedSeq<'src, I::Token> + Clone,
@@ -366,7 +366,7 @@ where
 }
 
 /// See [`custom`].
-pub struct Custom<F, I, O, E> {
+pub struct Custom<F, I:?Sized, O, E> {
     f: F,
     #[allow(dead_code)]
     phantom: EmptyPhantom<(E, O, I)>,
@@ -410,7 +410,7 @@ impl<F: Clone, I, O, E> Clone for Custom<F, I, O, E> {
 /// ```
 pub const fn custom<F, I, O, E>(f: F) -> Custom<F, I, O, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     F: for<'src> Fn(&mut InputRef<'src, '_, I, E>) -> Result<O::Of<'src>, ErrOfEx<'src, I, E>>,
     O: Hkt,
@@ -423,7 +423,7 @@ where
 
 impl<I, O, E, F> Parser<I, O, E> for Custom<F, I, O, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     F: for<'src> Fn(&mut InputRef<'src, '_, I, E>) -> Result<O::Of<'src>, ErrOfEx<'src, I, E>>,
     O: Hkt,
@@ -447,7 +447,7 @@ where
 }
 
 /// See [`select!`].
-pub struct Select<F, I, O, E> {
+pub struct Select<F, I:?Sized, O, E> {
     filter: F,
     #[allow(dead_code)]
     phantom: EmptyPhantom<(E, O, I)>,
@@ -466,7 +466,7 @@ impl<F: Clone, I, O, E> Clone for Select<F, I, O, E> {
 /// See [`select!`].
 pub const fn select<F, I, O, E>(filter: F) -> Select<F, I, O, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     I::Token: Clone,
     E: ParserExtra<I>,
     F: for<'src> Fn(I::Token, &mut MapExtra<'src, '_, I, E>) -> Option<O>,
@@ -479,7 +479,7 @@ where
 
 impl<I, O, E, F> Parser<I, O, E> for Select<F, I, O, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     I::Token: Clone,
     E: ParserExtra<I>,
     F: for<'src> Fn(I::Token, &mut MapExtra<'src, '_, I, E>) -> Option<O::Of<'src>>,
@@ -590,9 +590,9 @@ where
 }
 
 /// See [`any`].
-pub struct Any<I, E> {
+pub struct Any<I: ?Sized, E> {
     #[allow(dead_code)]
-    phantom: EmptyPhantom<(E, I)>,
+    phantom: PhantomData<(E, I)>,
 }
 
 impl<I, E> Copy for Any<I, E> {}
@@ -602,7 +602,7 @@ impl<I, E> Clone for Any<I, E> {
     }
 }
 
-impl<I, E> Parser<I, Id<I::Token>, E> for Any<I, E>
+impl<I: ?Sized, E> Parser<I, Id<I::Token>, E> for Any<I, E>
 where
     I: ValueInput,
     E: ParserExtra<I>,
@@ -646,9 +646,9 @@ where
 /// assert_eq!(any.parse("\t").into_result(), Ok('\t'));
 /// assert!(any.parse("").has_errors());
 /// ```
-pub const fn any<I: Input, E: ParserExtra<I>>() -> Any<I, E> {
+pub const fn any<I: Input + ?Sized, E: ParserExtra<I>>() -> Any<I, E> {
     Any {
-        phantom: EmptyPhantom::new(),
+        phantom: PhantomData,
     }
 }
 
@@ -733,7 +733,7 @@ impl<A: Clone, AE, F: Clone, E> Clone for MapCtx<A, AE, F, E> {
 
 impl<I, O, E, EI, A, F> Parser<I, O, E> for MapCtx<A, EI, F, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     EI: ParserExtra<I, ErrorFam = E::ErrorFam, State = E::State>,
     A: Parser<I, O, EI>,
@@ -810,7 +810,7 @@ where
 pub const fn map_ctx<P, OP, I, E, EP, F>(mapper: F, parser: P) -> MapCtx<P, EP, F, E>
 where
     F: for<'src> Fn(&CtxOf<'src, I, E>, Lt<'src>) -> CtxOf<'src, I, EP>,
-    I: Input,
+    I: Input + ?Sized,
     P: Parser<I, OP, EP>,
     E: ParserExtra<I>,
     EP: ParserExtra<I>,
@@ -824,7 +824,7 @@ where
 }
 
 /// See [`fn@todo`].
-pub struct Todo<I, O, E> {
+pub struct Todo<I:?Sized, O, E> {
     location: Location<'static>,
     #[allow(dead_code)]
     phantom: EmptyPhantom<(O, E, I)>,
@@ -863,7 +863,7 @@ impl<I, O, E> Clone for Todo<I, O, E> {
 /// int.parse("0xd4");
 /// ```
 #[track_caller]
-pub fn todo<'src, I: Input, O, E: ParserExtra<I>>() -> Todo<I, O, E> {
+pub fn todo<'src, I: Input + ?Sized, O, E: ParserExtra<I>>() -> Todo<I, O, E> {
     Todo {
         location: *Location::caller(),
         phantom: EmptyPhantom::new(),
@@ -872,7 +872,7 @@ pub fn todo<'src, I: Input, O, E: ParserExtra<I>>() -> Todo<I, O, E> {
 
 impl<I, O, E> Parser<I, O, E> for Todo<I, O, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     O: Hkt,
 {
@@ -956,7 +956,7 @@ macro_rules! impl_choice_for_tuple {
         #[allow(unused_variables, non_snake_case)]
         impl<I, E, $Head, $($X),*, O> Parser<I, O, E> for Choice<($Head, $($X,)*)>
         where
-            I: Input,
+            I: Input + ?Sized,
             E: ParserExtra<I>,
             $Head: Parser<I, O, E>,
             $($X: Parser<I, O, E>),*,
@@ -997,7 +997,7 @@ macro_rules! impl_choice_for_tuple {
     (~ $Head:ident) => {
         impl<I, E, $Head, O> Parser<I, O, E> for Choice<($Head,)>
         where
-            I: Input,
+            I: Input + ?Sized,
             E: ParserExtra<I>,
             $Head:  Parser<I, O, E>,
             O: Hkt
@@ -1018,7 +1018,7 @@ impl_choice_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S_ 
 impl<A, I, O, E> Parser<I, O, E> for Choice<&[A]>
 where
     A: Parser<I, O, E>,
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     O: Hkt,
 {
@@ -1051,7 +1051,7 @@ where
 impl<A, I, O, E> Parser<I, O, E> for Choice<Vec<A>>
 where
     A: Parser<I, O, E>,
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     O: Hkt,
 {
@@ -1068,7 +1068,7 @@ where
 impl<A, I, O, E, const N: usize> Parser<I, O, E> for Choice<[A; N]>
 where
     A: Parser<I, O, E>,
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     O: Hkt,
 {
@@ -1098,7 +1098,7 @@ pub const fn group<T>(parsers: T) -> Group<T> {
 
 impl<I, O, E, P, const N: usize> Parser<I, [O; N], E> for Group<[P; N]>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     P: Parser<I, O, E>,
     O: Hkt,
@@ -1165,7 +1165,7 @@ macro_rules! impl_group_for_tuple {
         #[allow(unused_variables, non_snake_case)]
         impl<I, E, $($X),*, $($O:Hkt),*> Parser<I, ($($O,)*), E> for Group<($($X,)*)>
         where
-            I: Input,
+            I: Input + ?Sized,
             E: ParserExtra<I>,
             $($X: Parser<I, $O, E>),*
         {
@@ -1265,7 +1265,7 @@ fn go_or_finish<'src, O, I, E, P, D>(
     inp: &mut InputRef<'src, '_, I, E>,
 ) -> PResult<D::Mode, ()>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     P: Parser<I, O, E>,
     D: Driver,
@@ -1289,7 +1289,7 @@ fn go_or_rewind<'src, O: Hkt, I, E, P, D>(
     parser: &P,
     inp: &mut InputRef<'src, '_, I, E>,
 ) where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     P: Parser<I, O, E>,
     D: Driver,
@@ -1320,7 +1320,7 @@ fn go_or_rewind<'src, O: Hkt, I, E, P, D>(
 //         #[allow(unused_variables, non_snake_case)]
 //         impl<I, E, $($P),*, $($O,)*> Parser<I, ($($O,)*), E> for Set<($($P,)*)>
 //         where
-//             I: Input,
+//             I: Input + ?Sized,
 //             E: ParserExtra<I>,
 //             $($P: Parser<I, $O, E>),*
 //         {
@@ -1357,7 +1357,7 @@ fn go_or_rewind<'src, O: Hkt, I, E, P, D>(
 impl<P, I, O: Hkt, E> Parser<I, VecOut<O>, E> for Set<Vec<P>>
 where
     P: Parser<I, O, E>,
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
 {
     #[inline]
@@ -1402,7 +1402,7 @@ where
 impl<P, I, O: Hkt, E, const N: usize> Parser<I, [O; N], E> for Set<[P; N]>
 where
     P: Parser<I, O, E>,
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     // remove this requirement when MSRV > 1.80
     O: Hkt,

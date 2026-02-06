@@ -10,9 +10,9 @@ use lexical::FromLexical;
 use lexical::parse_partial;
 
 /// TODO: Add documentation when approved
-pub struct Number<const F: u128, I, O, E> {
+pub struct Number<const F: u128, I: ?Sized, O, E> {
     #[allow(dead_code)]
-    phantom: EmptyPhantom<(I, E, O)>,
+    phantom: EmptyPhantom<(*const I, E, O)>,
 }
 
 impl<const F: u128, I, O, E> Copy for Number<F, I, O, E> {}
@@ -23,7 +23,7 @@ impl<const F: u128, I, O, E> Clone for Number<F, I, O, E> {
 }
 
 /// TODO: Add documentation when approved
-pub const fn number<const F: u128, I, O, E>() -> Number<F, I, O, E> {
+pub const fn number<const F: u128, I: ?Sized, O, E>() -> Number<F, I, O, E> {
     Number::<F, I, O, E> {
         phantom: EmptyPhantom::new(),
     }
@@ -34,7 +34,7 @@ pub struct ExpectedNumber;
 
 impl<const F: u128, I, O, E> Parser<I, O, E> for Number<F, I, O, E>
 where
-    I: SliceInput<Cursor = usize>,
+    I: SliceInput<Cursor = usize> + ?Sized,
     for<'src> SliceOf<'src,I>: AsRef<[u8]>,
     E: ParserExtra<I>,
     for<'src> ErrOfEx<'src,I,E>: LabelError<'src, I::Token,I::Span, ExpectedNumber>,
@@ -79,9 +79,9 @@ mod tests {
     mod rust {
         use super::*;
 
-        const FLOAT: Number<RUST_LITERAL, &str, Id<f64>, extra::Default> = number();
+        const FLOAT: Number<RUST_LITERAL, str, Id<f64>, extra::Default> = number();
 
-        fn validate(test: &str) {
+        fn validate(test: &mut str) {
             FLOAT.parse(test).unwrap();
         }
 
@@ -94,7 +94,7 @@ mod tests {
             for a in &pow {
                 for b in &pow {
                     for c in &pow {
-                        validate(&(a | b | c).to_string());
+                        validate(&mut (a | b | c).to_string());
                     }
                 }
             }
@@ -104,7 +104,7 @@ mod tests {
         fn huge_pow10() {
             for e in 300..310 {
                 for i in 0..100000 {
-                    validate(&format!("{i}e{e}"));
+                    validate(&mut format!("{i}e{e}"));
                 }
             }
         }
@@ -117,7 +117,7 @@ mod tests {
                 for _ in 0..400 {
                     s.push(digit);
                     if s.parse::<f64>().is_ok() {
-                        validate(&s);
+                        validate(&mut s);
                     }
                 }
             }
@@ -131,8 +131,8 @@ mod tests {
                         continue;
                     }
 
-                    validate(&format!("{i}e{e}"));
-                    validate(&format!("{i}e-{e}"));
+                    validate(&mut format!("{i}e{e}"));
+                    validate(&mut format!("{i}e-{e}"));
                 }
             }
         }
@@ -141,9 +141,9 @@ mod tests {
         fn subnorm() {
             for bits in 0u32..(1 << 21) {
                 let single: f32 = f32::from_bits(bits);
-                validate(&format!("{single:e}"));
+                validate(&mut format!("{single:e}"));
                 let double: f64 = f64::from_bits(bits as u64);
-                validate(&format!("{double:e}"));
+                validate(&mut format!("{double:e}"));
             }
         }
 
@@ -151,7 +151,7 @@ mod tests {
         fn tiny_pow10() {
             for e in 301..327 {
                 for i in 0..100000 {
-                    validate(&format!("{i}e-{e}"));
+                    validate(&mut format!("{i}e-{e}"));
                 }
             }
         }
@@ -159,7 +159,7 @@ mod tests {
         #[test]
         fn u32_small() {
             for i in 0..(1 << 19) {
-                validate(&i.to_string());
+                validate(&mut i.to_string());
             }
         }
 
@@ -167,14 +167,14 @@ mod tests {
         fn u64_pow2() {
             for exp in 19..64 {
                 let power: u64 = 1 << exp;
-                validate(&power.to_string());
+                validate(&mut power.to_string());
                 for offset in 1..123 {
-                    validate(&(power + offset).to_string());
-                    validate(&(power - offset).to_string());
+                    validate(&mut (power + offset).to_string());
+                    validate(&mut (power - offset).to_string());
                 }
             }
             for offset in 0..123 {
-                validate(&(u64::MAX - offset).to_string());
+                validate(&mut (u64::MAX - offset).to_string());
             }
         }
     }

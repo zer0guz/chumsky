@@ -174,7 +174,7 @@ macro_rules! op_check_and_emit {
 /// A type implemented by pratt parser operators.
 pub trait Operator<I, O, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     O: Hkt,
 {
@@ -288,7 +288,7 @@ where
 }
 
 /// A boxed pratt parser operator. See [`Operator`].
-pub struct Boxed<'a, I, O, E = extra::Default>(Rc<DynOperator<'a, I, O, E>>);
+pub struct Boxed<'a, I:?Sized, O, E = extra::Default>(Rc<DynOperator<'a, I, O, E>>);
 
 impl<I, O, E> Clone for Boxed<'_, I, O, E> {
     fn clone(&self) -> Self {
@@ -298,7 +298,7 @@ impl<I, O, E> Clone for Boxed<'_, I, O, E> {
 
 impl<I, O, E> Operator<I, O, E> for Boxed<'_, I, O, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     O: Hkt,
 {
@@ -473,12 +473,12 @@ impl Associativity {
 }
 
 /// See [`infix`].
-pub struct Infix<A, F, Atom, Op, I, E> {
+pub struct Infix<A, F, Atom, Op, I:?Sized, E> {
     op_parser: A,
     fold: F,
     associativity: Associativity,
     #[allow(dead_code)]
-    phantom: EmptyPhantom<(Atom, Op, I, E)>,
+    phantom: EmptyPhantom<(Atom, Op, *const I, E)>,
 }
 
 impl<A: Copy, F: Copy, Atom, Op, I, E> Copy for Infix<A, F, Atom, Op, I, E> {}
@@ -525,7 +525,7 @@ where
 
 impl<I, O, E, A, F, Op> Operator<I, O, E> for Infix<A, F, O, Op, I, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, Op, E>,
     F: for<'src> Fn(O::Of<'src>, Op::Of<'src>,O::Of<'src>, &mut MapExtra<'src, '_, I, E>) -> O::Of<'src>,
@@ -590,12 +590,12 @@ where
 }
 
 /// See [`prefix`].
-pub struct Prefix<A, F, Atom, Op, I, E> {
+pub struct Prefix<A, F, Atom, Op, I:?Sized, E> {
     op_parser: A,
     fold: F,
     binding_power: i32,
     #[allow(dead_code)]
-    phantom: EmptyPhantom<(Atom, Op, I, E)>,
+    phantom: EmptyPhantom<(Atom, Op, *const I, E)>,
 }
 
 impl<A: Copy, F: Copy, Atom, Op, I, E> Copy for Prefix<A, F, Atom, Op, I, E> {}
@@ -639,7 +639,7 @@ where
 
 impl<I, O, E, A, F, Op> Operator<I, O, E> for Prefix<A, F, O, Op, I, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, Op, E>,
     F: for<'src> Fn(Op::Of<'src>, O::Of<'src>, &mut MapExtra<'src, '_, I, E>) -> O::Of<'src>,
@@ -677,12 +677,12 @@ where
 }
 
 /// See [`postfix`].
-pub struct Postfix<A, F, Atom, Op, I, E> {
+pub struct Postfix<A, F, Atom, Op, I:?Sized, E> {
     op_parser: A,
     fold: F,
     binding_power: i32,
     #[allow(dead_code)]
-    phantom: EmptyPhantom<(Atom, Op, I, E)>,
+    phantom: EmptyPhantom<(Atom, Op, *const I, E)>,
 }
 
 impl<A: Copy, F: Copy, Atom, Op, I, E> Copy for Postfix<A, F, Atom, Op, I, E> {}
@@ -708,7 +708,7 @@ impl<A: Clone, F: Clone, Atom, Op, I, E> Clone for Postfix<A, F, Atom, Op, I, E>
 /// ```ignore
 /// impl Fn(Atom, Op, &mut MapExtra<'src, '_, I, E>) -> O
 /// ```
-pub const fn postfix<A, F, Atom, Op, I, E>(
+pub const fn postfix<A, F, Atom, Op, I:?Sized, E>(
     precedence: u16,
     op_parser: A,
     fold: F,
@@ -726,7 +726,7 @@ where
 
 impl<I, O, E, A, F, Op> Operator<I, O, E> for Postfix<A, F, O, Op, I, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, Op, E>,
     F: for<'src> Fn(O::Of<'src>, Op::Of<'src>, &mut MapExtra<'src, '_, I, E>) -> O::Of<'src>,
@@ -780,7 +780,7 @@ macro_rules! impl_operator_for_tuple {
         #[allow(unused_variables, non_snake_case)]
         impl<I, O, E, $($X),*> Operator< I, O, E> for ($($X,)*)
             where
-                I: Input,
+                I: Input + ?Sized,
                 E: ParserExtra<I>,
                 $($X: Operator< I, O, E>),*,
                 O: Hkt
@@ -860,7 +860,7 @@ impl_operator_for_tuple!(A_ B_ C_ D_ E_ F_ G_ H_ I_ J_ K_ L_ M_ N_ O_ P_ Q_ R_ S
 #[allow(unused_variables, non_snake_case)]
 impl<I, O, E, Op> Operator<I, O, E> for Vec<Op>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     Op: Operator<I, O, E>,
     O: Hkt,
@@ -939,7 +939,7 @@ impl<Atom, Ops> Pratt<Atom, Ops> {
         min_power: i32,
     ) -> PResult<D::Mode, O::Of<'src>>
     where
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         Atom: Parser<I, O, E>,
         Ops: Operator<I, O, E>,
@@ -1008,7 +1008,7 @@ impl<Atom, Ops> Pratt<Atom, Ops> {
 #[allow(unused_variables, non_snake_case)]
 impl<I, O, E, Atom, Ops> Parser<I, O, E> for Pratt<Atom, Ops>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     Atom: Parser<I, O, E>,
     Ops: Operator<I, O, E>,

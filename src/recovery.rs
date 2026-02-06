@@ -33,7 +33,12 @@ use super::*;
 /// This trait is sealed and so cannot be implemented by other crates because it has an unstable API. This may
 /// eventually change. For now, if you wish to implement a new strategy, consider using [`via_parser`] or
 /// [opening an issue/PR](https://github.com/zesterer/chumsky/issues/new).
-pub trait Strategy<I: Input, O: Hkt, E: ParserExtra<I> = extra::Default>: Sealed {
+pub trait Strategy<I, O, E = extra::Default>: Sealed
+where
+    I: Input + ?Sized,
+    O: Hkt,
+    E: ParserExtra<I>,
+{
     // Attempt to recover from a parsing failure.
     // The strategy should properly handle the alt error but is not required to handle rewinding.
     #[doc(hidden)]
@@ -56,7 +61,7 @@ pub fn via_parser<A>(parser: A) -> ViaParser<A> {
 impl<A> Sealed for ViaParser<A> {}
 impl<I, O, E, A> Strategy<I, O, E> for ViaParser<A>
 where
-    I: Input,
+    I: Input + ?Sized,
     A: Parser<I, O, E>,
     E: ParserExtra<I>,
     O: Hkt,
@@ -88,7 +93,7 @@ pub struct RecoverWith<A, S> {
 
 impl<I, O, E, A, S> Parser<I, O, E> for RecoverWith<A, S>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, O, E>,
     S: Strategy<I, O, E>,
@@ -139,7 +144,7 @@ pub struct SkipThenRetryUntil<S, U> {
 impl<S, U> Sealed for SkipThenRetryUntil<S, U> {}
 impl<I, O, E, S, U> Strategy<I, O, E> for SkipThenRetryUntil<S, U>
 where
-    I: Input,
+    I: Input + ?Sized,
     S: Parser<I, (), E>,
     U: Parser<I, (), E>,
     E: ParserExtra<I>,
@@ -199,7 +204,7 @@ pub struct SkipUntil<S, U, F> {
 impl<S, U, F> Sealed for SkipUntil<S, U, F> {}
 impl<I, O, E, S, U, F> Strategy<I, O, E> for SkipUntil<S, U, F>
 where
-    I: Input,
+    I: Input + ?Sized,
     S: Parser<I, (), E>,
     U: Parser<I, (), E>,
     F: for<'src> Fn(Lt<'src>) -> O::Of<'src>,

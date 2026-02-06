@@ -32,7 +32,7 @@ impl<I, O: Hkt, E, A, F> Parser<I, O, E> for Configure<A, F>
 where
     A: ConfigParser<I, O, E>,
     F: for<'src> Fn(A::Config, &CtxOf<'src, I, E>) -> A::Config,
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
 {
     #[inline(always)]
@@ -73,7 +73,7 @@ impl<I, OA, E, A, F> Parser<I, (), E> for IterConfigure<A, F, OA>
 where
     A: ConfigIterParser<I, OA, E>,
     F: for<'src> Fn(A::Config, &CtxOf<'src, I, E>) -> A::Config,
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     OA: Hkt,
 {
@@ -96,7 +96,7 @@ impl<I, O: Hkt, E, A, F> IterParser<I, O, E> for IterConfigure<A, F, O>
 where
     A: ConfigIterParser<I, O, E>,
     F: for<'src> Fn(A::Config, &CtxOf<'src, I, E>) -> A::Config,
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
 {
     type IterState<'src, D: Driver>
@@ -154,7 +154,7 @@ where
         I::Span,
         Lt<'src>,
     ) -> Result<A::Config, ErrOfEx<'src, I, E>>,
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     OA: Hkt,
 {
@@ -182,7 +182,7 @@ where
         I::Span,
         Lt<'src>,
     ) -> Result<A::Config, ErrOfEx<'src, I, E>>,
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
 {
     type IterState<'src, D: Driver>
@@ -239,7 +239,7 @@ impl<A, I, O: Hkt, E> Parser<I, SliceOut<I>, E> for ToSlice<A, O>
 where
     A: Parser<I, O, E>,
     E: ParserExtra<I>,
-    I: SliceInput,
+    I: SliceInput + ?Sized,
 {
     #[doc(hidden)]
     #[cfg(feature = "debug")]
@@ -282,7 +282,7 @@ impl<A: Clone, F: Clone> Clone for Filter<A, F> {
 
 impl<A, I, O, E, F> Parser<I, O, E> for Filter<A, F>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, O, E>,
     F: for<'src> Fn(&O::Of<'src>) -> bool,
@@ -328,7 +328,7 @@ impl<A: Clone, OA, F: Clone> Clone for FilterMap<A, OA, F> {
 
 impl<I, O: Hkt, E, A, OA, F> Parser<I, O, E> for FilterMap<A, OA, F>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     F: for<'src> Fn(OA::Of<'src>, Lt<'src>) -> Option<O::Of<'src>>,
@@ -420,7 +420,7 @@ impl<A: Clone, OA,U, F: Clone> Clone for Map<A, OA,U, F> {
 
 impl<I, O, E, A, OA, F> Parser<I, <F as MapFn<OA, I, E>>::Out, E> for Map<A, OA,O, F>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     F: MapFn<OA, I, E>,
@@ -446,7 +446,7 @@ where
 
 impl<I, O, E, A, OA, F> IterParser<I, O, E> for Map<A, OA, O,F>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: IterParser<I, OA, E>,
     F: for<'src> Fn(OA::Of<'src>, Lt<'src>) -> O::Of<'src>,
@@ -501,7 +501,7 @@ impl<A: Clone, OA, F: Clone> Clone for MapWith<A, OA, F> {
 }
 impl<I, E, A, OA, F> Parser<I, <F as MapWithFn<OA, I, E>>::Out, E> for MapWith<A, OA, F>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     OA: Hkt,
     A: Parser<I, OA, E>,
@@ -530,7 +530,7 @@ where
 
 impl<I, O: Hkt, E, A, OA, F> IterParser<I, O, E> for MapWith<A, OA, F>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: IterParser<I, OA, E>,
     F: for<'src> Fn(OA::Of<'src>, &mut MapExtra<'src, '_, I, E>) -> O::Of<'src>,
@@ -592,7 +592,7 @@ impl<A: Clone, OA, F: Clone> Clone for MapGroup<A, OA, F> {
 #[cfg(feature = "nightly")]
 impl<I, O, E, A, OA, F> Parser<I, O, E> for MapGroup<A, OA, F>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     F: for<'src> Fn<(OA::Of<'src>, Lt<'src>), Output = O::Of<'src>>,
@@ -614,7 +614,7 @@ where
 #[cfg(feature = "nightly")]
 impl<I, O, E, A, OA, F> IterParser<I, O, E> for MapGroup<A, OA, F>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: IterParser<I, OA, E>,
     F: for<'src> Fn<(OA::Of<'src>, Lt<'src>), Output = O::Of<'src>>,
@@ -668,7 +668,7 @@ impl<A: Clone, OA> Clone for ToSpan<A, OA> {
 
 impl<I, OA, E, A> Parser<I, Id<I::Span>, E> for ToSpan<A, OA>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     OA: Hkt,
@@ -701,7 +701,7 @@ impl<A: Clone, OA> Clone for Spanned<A, OA> {
 
 impl<I, OA, E, A> Parser<I, SpannedOut<I, OA>, E> for Spanned<A, OA>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     OA: Hkt,
@@ -744,7 +744,7 @@ impl<F: Clone, A: Clone, B: Clone, OB, E> Clone for TryFoldl<F, A, B, OB, E> {
 
 impl<I, F, A, B, OA, OB, E> Parser<I, OA, E> for TryFoldl<F, A, B, OB, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     A: Parser<I, OA, E>,
     B: IterParser<I, OB, E>,
     E: ParserExtra<I>,
@@ -814,7 +814,7 @@ impl<A: Clone, OA, F: Clone> Clone for TryMap<A, OA, F> {
 
 impl<I, O: Hkt, E, A, OA, F> Parser<I, O, E> for TryMap<A, OA, F>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     F: for<'src> Fn(OA::Of<'src>, I::Span, Lt<'src>) -> Result<O::Of<'src>, ErrOfEx<'src, I, E>>,
@@ -901,7 +901,7 @@ impl<A: Clone, OA, F: Clone> Clone for TryMapWith<A, OA, F> {
 
 impl<I, O: Hkt, E, A, OA, F> Parser<I, O, E> for TryMapWith<A, OA, F>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     F: for<'src> Fn(
@@ -983,7 +983,7 @@ impl<A: Clone, OA, O: Clone> Clone for To<A, OA, O> {
 
 impl<I, E, A, OA, U> Parser<I, Id<U>, E> for To<A, OA, U>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     OA: Hkt,
@@ -1023,7 +1023,7 @@ impl<A: Clone, O> Clone for IntoIter<A, O> {
 
 impl<A, O, I, E> Parser<I, (), E> for IntoIter<A, O>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, O, E>,
     O: IntoIterator + Hkt,
@@ -1039,7 +1039,7 @@ where
 
 impl<I, O, E, A> IterParser<I, IterItem<O>, E> for IntoIter<A, O>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, O, E>,
     O: Hkt,
@@ -1095,7 +1095,7 @@ impl<A: Clone, OA> Clone for Ignored<A, OA> {
 
 impl<I, E, A, OA> Parser<I, (), E> for Ignored<A, OA>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     OA: Hkt,
@@ -1138,7 +1138,7 @@ impl<A: Clone, O> Clone for Unwrapped<A, O> {
 
 impl<I, E, A, O> Parser<I, O, E> for Unwrapped<A, OptionOut<O>>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OptionOut<O>, E>,
     O: Hkt,
@@ -1167,7 +1167,7 @@ where
 
 impl<I, E, A, O> Parser<I, O, E> for Unwrapped<A, Option<O>>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OptionOut<O>, E>,
     O: Hkt,
@@ -1205,7 +1205,7 @@ pub struct Memoized<A> {
 #[cfg(feature = "memoization")]
 impl<I, E, A, O> Parser<I, O, E> for Memoized<A>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     for<'src> ErrOfEx<'src, I, E>: Clone,
     A: Parser<I, O, E>,
@@ -1275,7 +1275,7 @@ impl<A: Clone, B: Clone, OA, OB, E> Clone for Then<A, B, OA, OB, E> {
 
 impl<I, E, A, B, OA, OB> Parser<I, (OA, OB), E> for Then<A, B, OA, OB, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     B: Parser<I, OB, E>,
@@ -1306,7 +1306,7 @@ where
 
 impl<I, E, A, B, O, U, V> IterParser<I, O, E> for Then<A, B, U, V, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: IterParser<I, O, E>,
     B: IterParser<I, O, E>,
@@ -1366,7 +1366,7 @@ impl<A: Clone, B: Clone, OA, E> Clone for IgnoreThen<A, B, OA, E> {
 
 impl<I, E, A, B, OA, OB> Parser<I, OB, E> for IgnoreThen<A, B, OA, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     B: Parser<I, OB, E>,
@@ -1416,7 +1416,7 @@ impl<A: Clone, B: Clone, OB, E> Clone for ThenIgnore<A, B, OB, E> {
 
 impl<I, E, A, B, OA, OB> Parser<I, OA, E> for ThenIgnore<A, B, OB, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     B: Parser<I, OB, E>,
@@ -1466,7 +1466,7 @@ where
 
 // impl<I, J, E, A, B, O> Parser<I, O, E> for NestedIn<A, B, J, O, E>
 // where
-//     I: Input,
+//     I: Input + ?Sized,
 //     E: ParserExtra<I>,
 //     // These bounds looks silly, but they basically just ensure that the extra type of the inner parser is compatible with the extra of the outer parser
 //     E: ParserExtra<
@@ -1547,7 +1547,7 @@ where
 // }
 
 /// See [`Parser::ignore_with_ctx`].
-pub struct IgnoreWithCtx<A, B, OA, I, E> {
+pub struct IgnoreWithCtx<A, B, OA, I: ?Sized, E> {
     pub(crate) parser: A,
     pub(crate) then: B,
     #[allow(dead_code)]
@@ -1568,7 +1568,7 @@ impl<A: Clone, B: Clone, OA, I, E> Clone for IgnoreWithCtx<A, B, OA, I, E> {
 impl<I, E, A, B, OA, OB> Parser<I, OB, E>
     for IgnoreWithCtx<A, B, OA, I, extra::Full<E::ErrorFam, E::State, CtxOut<OA>>>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     B: Parser<I, OB, extra::Full<E::ErrorFam, E::State, CtxOut<OA>>>,
@@ -1590,7 +1590,7 @@ where
 impl<I, E, A, B, OA, OB> IterParser<I, OB, E>
     for IgnoreWithCtx<A, B, OA, I, extra::Full<E::ErrorFam, E::State, CtxOut<OA>>>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     B: IterParser<I, OB, extra::Full<E::ErrorFam, E::State, CtxOut<OA>>>,
@@ -1626,7 +1626,7 @@ where
 }
 
 /// See [`Parser::then_with_ctx`].
-pub struct ThenWithCtx<A, B, OA, I, E> {
+pub struct ThenWithCtx<A, B, OA, I: ?Sized, E> {
     pub(crate) parser: A,
     pub(crate) then: B,
     #[allow(dead_code)]
@@ -1647,7 +1647,7 @@ impl<A: Clone, B: Clone, OA, I, E> Clone for ThenWithCtx<A, B, OA, I, E> {
 impl<I, E, A, B, OA, OB> Parser<I, (OA, OB), E>
     for ThenWithCtx<A, B, OA, I, extra::Full<E::ErrorFam, E::State, CtxOut<OA>>>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     B: Parser<I, OB, extra::Full<E::ErrorFam, E::State, CtxOut<OA>>>,
@@ -1670,7 +1670,7 @@ where
 impl<I, E, A, B, OA, OB> IterParser<I, OB, E>
     for ThenWithCtx<A, B, OA, I, extra::Full<E::ErrorFam, E::State, CtxOut<OA>>>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     B: IterParser<I, OB, extra::Full<E::ErrorFam, E::State, CtxOut<OA>>>,
@@ -1723,7 +1723,7 @@ impl<A: Clone, Ctx: Clone> Clone for WithCtx<A, Ctx> {
 
 impl<I, O: Hkt, E, A, Ctx> Parser<I, O, E> for WithCtx<A, Ctx>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, O, extra::Full<E::ErrorFam, E::State, Id<Ctx>>>,
 {
@@ -1756,7 +1756,7 @@ impl<A: Clone, Ctx: Clone> Clone for WithState<A, Ctx> {
 
 impl<I, O: Hkt, E, A, State> Parser<I, O, E> for WithState<A, State>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, O, extra::Full<E::ErrorFam, State, E::ContextFam>>,
     State: Clone + Inspector<I>,
@@ -1795,7 +1795,7 @@ impl<A: Clone, B: Clone, C: Clone, OB, OC> Clone for DelimitedBy<A, B, C, OB, OC
 
 impl<I, E, A, B, C, OA, OB, OC> Parser<I, OA, E> for DelimitedBy<A, B, C, OB, OC>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     B: Parser<I, OB, E>,
@@ -1851,7 +1851,7 @@ impl<A: Clone, B: Clone, OB> Clone for PaddedBy<A, B, OB> {
 
 impl<I, E, A, B, OA, OB> Parser<I, OA, E> for PaddedBy<A, B, OB>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     B: Parser<I, OB, E>,
@@ -1880,7 +1880,7 @@ pub struct Or<A, B> {
 
 impl<I, O: Hkt, E, A, B> Parser<I, O, E> for Or<A, B>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, O, E>,
     B: Parser<I, O, E>,
@@ -1931,7 +1931,7 @@ impl RepeatedCfg {
 }
 
 /// See [`Parser::repeated`].
-pub struct Repeated<A, OA, I, E> {
+pub struct Repeated<A, OA, I: ?Sized, E> {
     pub(crate) parser: A,
     pub(crate) at_least: usize,
     // Slightly evil: Should be `Option<usize>`, but we encode `!0` as 'no cap' because it's so large
@@ -1959,7 +1959,7 @@ impl<A: Clone, OA, I, E> Clone for Repeated<A, OA, I, E> {
 impl<A, OA, I, E> Repeated<A, OA, I, E>
 where
     A: Parser<I, OA, E>,
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     OA: Hkt,
 {
@@ -2026,7 +2026,7 @@ where
 
 impl<I, E, A, OA> Parser<I, (), E> for Repeated<A, OA, I, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     OA: Hkt,
@@ -2080,7 +2080,7 @@ where
 
 impl<A, O, I, E> IterParser<I, O, E> for Repeated<A, O, I, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, O, E>,
     O: Hkt,
@@ -2146,7 +2146,7 @@ where
 
 impl<A, O, I, E> ConfigIterParser<I, O, E> for Repeated<A, O, I, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, O, E>,
     O: Hkt,
@@ -2195,7 +2195,7 @@ where
 }
 
 /// See [`Parser::separated_by`].
-pub struct SeparatedBy<A, B, OA, OB, I, E> {
+pub struct SeparatedBy<A, B, OA, OB, I: ?Sized, E> {
     pub(crate) parser: A,
     pub(crate) separator: B,
     pub(crate) at_least: usize,
@@ -2230,7 +2230,7 @@ impl<A, B, OA, OB, I, E> SeparatedBy<A, B, OA, OB, I, E>
 where
     A: Parser<I, OA, E>,
     B: Parser<I, OB, E>,
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     OA: Hkt,
     OB: Hkt,
@@ -2367,7 +2367,7 @@ where
 
 impl<I, E, A, B, OA, OB> IterParser<I, OA, E> for SeparatedBy<A, B, OA, OB, I, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     B: Parser<I, OB, E>,
@@ -2471,7 +2471,7 @@ where
 
 impl<I, E, A, B, OA, OB> Parser<I, (), E> for SeparatedBy<A, B, OA, OB, I, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     B: Parser<I, OB, E>,
@@ -2525,7 +2525,7 @@ impl<A: Clone, O> Clone for Enumerate<A, O> {
 impl<I, O: Hkt, E, A> IterParser<I, (Id<usize>, O), E> for Enumerate<A, O>
 where
     A: IterParser<I, O, E>,
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
 {
     type IterState<'src, D: Driver>
@@ -2576,7 +2576,7 @@ impl<A: Clone, O, C> Clone for Collect<A, O, C> {
 
 impl<I, O, E, A, C> Parser<I, CollectOut<C, O>, E> for Collect<A, O, C>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: IterParser<I, O, E>,
     C: Container,
@@ -2632,7 +2632,7 @@ impl<A: Clone, O, C> Clone for CollectExactly<A, O, C> {
 }
 impl<I, O, E, A, C> Parser<I, CollectExactlyOut<C, O>, E> for CollectExactly<A, O, C>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: IterParser<I, O, E>,
     O: Hkt,
@@ -2687,7 +2687,7 @@ pub struct OrNot<A> {
 
 impl<I, O: Hkt, E, A> Parser<I, OptionOut<O>, E> for OrNot<A>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, O, E>,
 {
@@ -2717,7 +2717,7 @@ where
 
 impl<A, O, I, E> IterParser<I, O, E> for OrNot<A>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, O, E>,
     O: Hkt,
@@ -2780,7 +2780,7 @@ impl<A: Clone, OA> Clone for Not<A, OA> {
 
 impl<I, E, A, OA> Parser<I, (), E> for Not<A, OA>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     OA: Hkt,
@@ -2841,7 +2841,7 @@ impl<A: Clone, O> Clone for Flatten<A, O> {
 #[cfg(feature = "nightly")]
 impl<A, O, I, E> IterParser<I, IterItem<O>, E> for Flatten<A, O>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: IterParser<I, O, E>,
     O: Hkt,
@@ -2924,7 +2924,7 @@ impl<A: Clone, B: Clone, OB> Clone for AndIs<A, B, OB> {
 
 impl<I, E, A, B, OA, OB> Parser<I, OA, E> for AndIs<A, B, OB>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     B: Parser<I, OB, E>,
@@ -2989,7 +2989,7 @@ impl<F: Clone, A: Clone, B: Clone, O, E> Clone for Fold<F, A, B, O, E> {
 
 impl<I, F, A, B, O, E> Parser<I, Id<B>, E> for Fold<F, A, B, O, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: IterParser<I, O, E>,
     O: Hkt,
@@ -3046,7 +3046,7 @@ impl<F: Clone, A: Clone, B: Clone, OA, E> Clone for Foldr<F, A, B, OA, E> {
 
 impl<I, F, A, B, O, OA, E> Parser<I, O, E> for Foldr<F, A, B, OA, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     A: IterParser<I, OA, E>,
     B: Parser<I, O, E>,
     E: ParserExtra<I>,
@@ -3126,7 +3126,7 @@ impl<F: Clone, A: Clone, B: Clone, OA, E> Clone for FoldrWith<F, A, B, OA, E> {
 
 impl<I, F, A, B, O, OA, E> Parser<I, O, E> for FoldrWith<F, A, B, OA, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     A: IterParser<I, OA, E>,
     B: Parser<I, O, E>,
     E: ParserExtra<I>,
@@ -3197,7 +3197,7 @@ impl<F: Clone, A: Clone, B: Clone, OB, E> Clone for Foldl<F, A, B, OB, E> {
 
 impl<I, F, A, B, O, OB, E> Parser<I, O, E> for Foldl<F, A, B, OB, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     A: Parser<I, O, E>,
     B: IterParser<I, OB, E>,
     E: ParserExtra<I>,
@@ -3271,7 +3271,7 @@ impl<F: Clone, A: Clone, B: Clone, OB, E> Clone for FoldlWith<F, A, B, OB, E> {
 
 impl<I, F, A, B, O, OB, E> Parser<I, O, E> for FoldlWith<F, A, B, OB, E>
 where
-    I: Input,
+    I: Input + ?Sized,
     A: Parser<I, O, E>,
     B: IterParser<I, OB, E>,
     E: ParserExtra<I>,
@@ -3332,7 +3332,7 @@ pub struct Rewind<A> {
 
 impl<I, O: Hkt, E, A> Parser<I, O, E> for Rewind<A>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, O, E>,
 {
@@ -3382,7 +3382,7 @@ pub struct MapErr<A, F> {
 
 impl<I, O: Hkt, E, A, F> Parser<I, O, E> for MapErr<A, F>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, O, E>,
     F: for<'src> Fn(ErrOfEx<'src, I, E>, Lt<'src>) -> ErrOfEx<'src, I, E>,
@@ -3418,7 +3418,7 @@ where
 
 // impl<I, O:OutFam, E, A, F> Parser<I, O, E> for MapErrWithSpan<A, F>
 // where
-//     I: Input,
+//     I: Input + ?Sized,
 //     E: ParserExtra<I>,
 //     A: Parser<I, O, E>,
 //     F: Fn(E::Error, I::Span) -> E::Error,
@@ -3454,7 +3454,7 @@ pub struct MapErrWithState<A, F> {
 
 impl<I, O: Hkt, E, A, F> Parser<I, O, E> for MapErrWithState<A, F>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, O, E>,
     F: for<'src> Fn(ErrOfEx<'src, I, E>, I::Span, &mut E::State, Lt<'src>) -> ErrOfEx<'src, I, E>,
@@ -3517,7 +3517,7 @@ impl<A: Clone, OA, F: Clone> Clone for Validate<A, OA, F> {
 
 impl<I, OA, U, E, A, F> Parser<I, Id<U>, E> for Validate<A, OA, F>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
     F: for<'src> Fn(
@@ -3565,7 +3565,7 @@ where
 
 // impl<I, O:OutFam, E, A, F> Parser<I, O, E> for OrElse<A, F>
 // where
-//     I: Input,
+//     I: Input + ?Sized,
 //     E: ParserExtra<I>,
 //     A: Parser<I, O, E>,
 //     F: Fn(E::Error) -> Result<O, E::Error>,
@@ -3608,7 +3608,7 @@ pub struct Contextual<A> {
 
 impl<I, O: Hkt, E, A> Parser<I, O, E> for Contextual<A>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, O, E>,
 {
@@ -3625,7 +3625,7 @@ where
 
 impl<I, O: Hkt, E, A> ConfigParser<I, O, E> for Contextual<A>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, O, E>,
 {

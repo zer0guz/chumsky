@@ -95,7 +95,7 @@ impl<A, L> Labelled<A, L> {
 
 impl<I, O, E, A, L> Parser<I, O, E> for Labelled<A, L>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, O, E>,
     L: Clone,
@@ -177,7 +177,7 @@ impl<A, L, F> LabelledWith<A, L, F> {
 
 impl<I, O, E, A, L, F> Parser<I, O, E> for LabelledWith<A, L, F>
 where
-    I: Input,
+    I: Input + ?Sized,
     E: ParserExtra<I>,
     A: Parser<I, O, E>,
     F: Fn() -> L,

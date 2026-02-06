@@ -62,7 +62,7 @@ pub trait Mode {
         inp: &mut InputRef<'src, '_, I, E>,
     ) -> PResult<Self, O::Of<'src>>
     where
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         P: Parser<I, O, E> + ?Sized,
         O: Hkt;
@@ -72,7 +72,7 @@ pub trait Mode {
         inp: &mut InputRef<'src, '_, I, E>,
     ) -> PResult<Self, O::Of<'src>>
     where
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         P: Parser<I, O, E> + ?Sized,
         O: Hkt;
@@ -86,7 +86,7 @@ pub trait Mode {
         cfg: P::Config,
     ) -> PResult<Self, O::Of<'src>>
     where
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         P: ConfigParser<I, O, E> + ?Sized,
         O: Hkt;
@@ -100,7 +100,7 @@ pub trait Mode {
     ) -> pratt::OperatorResult<Self::Output< O::Of<'src>>, ()>
     where
         Op: pratt::Operator<I, O, E>,
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         O: Hkt;
     #[cfg(feature = "pratt")]
@@ -114,7 +114,7 @@ pub trait Mode {
     ) -> pratt::OperatorResult<Self::Output< O::Of<'src>>, Self::Output< O::Of<'src>>>
     where
         Op: pratt::Operator<I, O, E>,
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         O: Hkt;
     #[cfg(feature = "pratt")]
@@ -129,7 +129,7 @@ pub trait Mode {
     ) -> pratt::OperatorResult<Self::Output< O::Of<'src>>, Self::Output< O::Of<'src>>>
     where
         Op: pratt::Operator<I, O, E>,
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         O: Hkt;
 }
@@ -187,7 +187,7 @@ impl Mode for Emit {
         inp: &mut InputRef<'src, '_, I, E>,
     ) -> PResult<Self, O::Of<'src>>
     where
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         P: Parser<I, O, E> + ?Sized,
         O: Hkt,
@@ -199,7 +199,7 @@ impl Mode for Emit {
         inp: &mut InputRef<'src, '_, I, E>,
     ) -> PResult<Self, O::Of<'src>>
     where
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         P: Parser<I, O, E> + ?Sized,
         O: Hkt,
@@ -214,7 +214,7 @@ impl Mode for Emit {
         cfg: P::Config,
     ) -> PResult<Self, O::Of<'src>>
     where
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         P: ConfigParser<I, O, E> + ?Sized,
         O: Hkt
@@ -232,7 +232,7 @@ impl Mode for Emit {
     ) -> pratt::OperatorResult<Self::Output< O::Of<'src>>, ()>
     where
         Op: pratt::Operator<I, O, E>,
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         O: Hkt,
     {
@@ -250,7 +250,7 @@ impl Mode for Emit {
     ) -> pratt::OperatorResult<Self::Output<O::Of<'src>>, Self::Output<O::Of<'src>>>
     where
         Op: pratt::Operator<I, O, E>,
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         O: Hkt
     {
@@ -269,7 +269,7 @@ impl Mode for Emit {
     ) -> pratt::OperatorResult<Self::Output<O::Of<'src>>, Self::Output<O::Of<'src>>>
     where
         Op: pratt::Operator<I, O, E>,
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         O: Hkt
     {
@@ -315,7 +315,7 @@ impl Mode for Check {
     #[inline(always)]
     fn invoke<'src, I, O, E, P>(parser: &P, inp: &mut InputRef<'src, '_, I, E>) -> PResult<Self, O::Of<'src>>
     where
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         P: Parser<I, O, E> + ?Sized,
         O: Hkt
@@ -328,7 +328,7 @@ impl Mode for Check {
         inp: &mut InputRef<'src, '_, I, E>,
     ) -> PResult<Self, O::Of<'src>>
     where
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         P: Parser<I, O, E> + ?Sized,
         O: Hkt
@@ -343,7 +343,7 @@ impl Mode for Check {
         cfg: P::Config,
     ) -> PResult<Self, O::Of<'src>>
     where
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         P: ConfigParser<I, O, E> + ?Sized,
         O: Hkt
@@ -361,7 +361,7 @@ impl Mode for Check {
     ) -> pratt::OperatorResult<Self::Output<O::Of<'src>>, ()>
     where
         Op: pratt::Operator<I, O, E>,
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         O: Hkt
     {
@@ -379,7 +379,7 @@ impl Mode for Check {
     ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
     where
         Op: pratt::Operator<I, O, E>,
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         O: Hkt
     {
@@ -398,7 +398,7 @@ impl Mode for Check {
     ) -> pratt::OperatorResult<Self::Output<O>, Self::Output<O>>
     where
         Op: pratt::Operator<I, O, E>,
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         O: Hkt
     {
@@ -444,7 +444,7 @@ pub trait Driver {
         inp: &mut InputRef<'src, '_, I, E>,
     ) -> PResult<Self::Mode, O::Of<'src>>
     where
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         P: Parser<I, O, E> + ?Sized,
         O: Hkt;
@@ -455,7 +455,7 @@ pub trait Driver {
         cfg: P::Config,
     ) -> PResult<Self::Mode, O::Of<'src>>
     where
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         P: ConfigParser<I, O, E> + ?Sized,
         O: Hkt;
@@ -475,7 +475,7 @@ impl<M: Mode, P: Policy> Driver for Drive<M, P> {
         inp: &mut InputRef<'src, '_, I, E>,
     ) -> PResult<Self::Mode, O::Of<'src>>
     where
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         Pa: Parser<I, O, E> + ?Sized,
         O: Hkt
@@ -493,7 +493,7 @@ impl<M: Mode, P: Policy> Driver for Drive<M, P> {
         cfg: Pa::Config,
     ) -> PResult<Self::Mode, O::Of<'src>>
     where
-        I: Input,
+        I: Input + ?Sized,
         E: ParserExtra<I>,
         Pa: ConfigParser<I, O, E> + ?Sized,
         O: Hkt,
@@ -519,6 +519,6 @@ pub type CheckRecover = Drive<Check, Recover>;
 
 pub type DriverOut<D, O> = <<D as Driver>::Mode as Mode>::Output<O>;
 
-pub trait Sealed: Sized {}
+pub trait Sealed {}
 pub struct Bounds<T>(T);
 impl<T> Sealed for Bounds<T> {}
