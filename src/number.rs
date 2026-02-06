@@ -34,7 +34,6 @@ pub struct ExpectedNumber;
 
 impl<const F: u128, I, O, E> Parser<I, O, E> for Number<F, I, O, E>
 where
-    O: FromLexical,
     I: SliceInput<Cursor = usize>,
     for<'src> SliceOf<'src,I>: AsRef<[u8]>,
     E: ParserExtra<I>,
@@ -80,7 +79,7 @@ mod tests {
     mod rust {
         use super::*;
 
-        const FLOAT: Number<RUST_LITERAL, &str, f64, extra::Default> = number();
+        const FLOAT: Number<RUST_LITERAL, &str, Id<f64>, extra::Default> = number();
 
         fn validate(test: &str) {
             FLOAT.parse(test).unwrap();

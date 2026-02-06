@@ -400,15 +400,15 @@ where
 }
 
 /// See [`Parser::map`].
-pub struct Map<A, OA, F> {
+pub struct Map<A, OA,U, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
     #[allow(dead_code)]
-    pub(crate) phantom: EmptyPhantom<OA>,
+    pub(crate) phantom: EmptyPhantom<(OA,U)>,
 }
 
-impl<A: Copy, OA, F: Copy> Copy for Map<A, OA, F> {}
-impl<A: Clone, OA, F: Clone> Clone for Map<A, OA, F> {
+impl<A: Copy, OA,U,F: Copy> Copy for Map<A, OA,U, F> {}
+impl<A: Clone, OA,U, F: Clone> Clone for Map<A, OA,U, F> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -418,13 +418,13 @@ impl<A: Clone, OA, F: Clone> Clone for Map<A, OA, F> {
     }
 }
 
-impl<I, O: Hkt, E, A, OA, F> Parser<I, O, E> for Map<A, OA, F>
+impl<I, O, E, A, OA, F> Parser<I, <F as MapFn<OA, I, E>>::Out, E> for Map<A, OA,O, F>
 where
     I: Input,
     E: ParserExtra<I>,
     A: Parser<I, OA, E>,
-    F: for<'src> Fn(OA::Of<'src>, Lt<'src>) -> O::Of<'src>,
-    OA: Hkt,
+    F: MapFn<OA, I, E>,
+    OA: Hkt, O: Hkt
 {
     #[doc(hidden)]
     #[cfg(feature = "debug")]
@@ -436,15 +436,15 @@ where
     fn go<'src, D: Driver>(
         &self,
         inp: &mut InputRef<'src, '_, I, E>,
-    ) -> PResult<D::Mode, O::Of<'src>> {
+    ) -> PResult<D::Mode, <<F as MapFn<OA, I, E>>::Out as Hkt>::Of<'src>> {
         let out = self.parser.go::<D>(inp)?;
-        Ok(D::Mode::map(out, |out| (self.mapper)(out, Lt::new())))
+        Ok(D::Mode::map(out, |out| self.mapper.apply(out, Lt::new())))
     }
 
-    go_extra!(O);
+    go_extra!(<F as MapFn<OA, I, E>>::Out);
 }
 
-impl<I, O, E, A, OA, F> IterParser<I, O, E> for Map<A, OA, F>
+impl<I, O, E, A, OA, F> IterParser<I, O, E> for Map<A, OA, O,F>
 where
     I: Input,
     E: ParserExtra<I>,

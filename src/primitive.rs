@@ -156,7 +156,7 @@ where
     }
 }
 
-impl<I, E, T> Parser<I, Id<T>, E> for Just<T, I, E>
+impl<I, E, T> Parser<I, I, E> for Just<T, I, E>
 where
     I: Input,
     E: ParserExtra<I>,

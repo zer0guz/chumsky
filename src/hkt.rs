@@ -79,7 +79,7 @@ where
     type Of<'src> = <I::Span as WrappingSpan<OA::Of<'src>>>::Spanned;
 }
 
-pub struct CollectExactlyOut<C, O>(core::marker::PhantomData<fn() -> (C, O)>);
+pub struct CollectExactlyOut<C, O>(core::marker::PhantomData<(C, O)>);
 
 impl<C, O> Hkt for CollectExactlyOut<C, O>
 where
@@ -89,7 +89,7 @@ where
     type Of<'src> = C::With<O::Of<'src>>;
 }
 
-pub struct VecOut<O>(core::marker::PhantomData<fn() -> O>);
+pub struct VecOut<O>(core::marker::PhantomData<O>);
 
 impl<O: Hkt> Hkt for VecOut<O> {
     type Of<'src> = Vec<O::Of<'src>>;
@@ -130,7 +130,16 @@ pub trait MapWithFn<OA: Hkt, I: Input, E: ParserExtra<I>> {
     ) -> <Self::Out as Hkt>::Of<'src>;
 }
 
-// Wrapper that “stores” U at the type level (no runtime cost)
+pub trait MapFn<OA: Hkt, I: Input, E: ParserExtra<I>> {
+    type Out: Hkt;
+
+    fn apply<'src>(
+        &self,
+        x: OA::Of<'src>,
+        lt: Lt<'src>,
+    ) -> <Self::Out as Hkt>::Of<'src>;
+}
+
 pub struct Mapper<F, U>(pub F, core::marker::PhantomData<fn() -> U>);
 
 impl<F:Clone, U> Clone for Mapper<F, U> {
@@ -148,19 +157,40 @@ impl<F, U> Mapper<F, U> {
 impl<OA, I, E, F, U> MapWithFn<OA, I, E> for Mapper<F, U>
 where
     OA: Hkt,
+    U: Hkt,
     I: Input,
     E: ParserExtra<I>,
-    F: for<'src> Fn(OA::Of<'src>, &mut MapExtra<'src, '_, I, E>) -> U,
+    F: for<'src> Fn(OA::Of<'src>, &mut MapExtra<'src, '_, I, E>) -> U::Of<'src>,
 {
-    type Out = Id<U>;
+    type Out = U;
 
     #[inline(always)]
     fn apply<'src>(
         &self,
         x: OA::Of<'src>,
         extra: &mut MapExtra<'src, '_, I, E>,
-    ) -> U {
+    ) -> U::Of<'src> {
         (self.0)(x, extra)
+    }
+}
+
+impl<OA, I, E, F, U> MapFn<OA, I, E> for Mapper<F, U>
+where
+    OA: Hkt,
+    U: Hkt,
+    I: Input,
+    E: ParserExtra<I>,
+    F: for<'src> Fn(OA::Of<'src>, Lt<'src>) -> U::Of<'src>,
+{
+    type Out = U;
+
+    #[inline(always)]
+    fn apply<'src>(
+        &self,
+        x: OA::Of<'src>,
+        lt: Lt<'src>,
+    ) -> U::Of<'src> {
+        (self.0)(x, lt)
     }
 }
 
@@ -198,7 +228,4 @@ where
 
 impl Hkt for &str {
     type Of<'src> = &'src str;
-}
-impl Hkt for f64 {
-    type Of<'src> = f64;
 }

@@ -85,7 +85,7 @@ impl Container for Vec<()> {
     fn with_capacity<T>(n: usize) -> Self::With<T> {
         Vec::with_capacity(n)
     }
-    
+
     fn push<T>(c: &mut Self::With<T>, item: T) {
         Vec::push(c, item);
     }
@@ -95,7 +95,7 @@ impl Container for LinkedList<()> {
     type With<T> = LinkedList<T>;
 
     fn push<T>(c: &mut Self::With<T>, item: T) {
-        LinkedList::push_back(c,item);
+        LinkedList::push_back(c, item);
     }
 }
 
@@ -856,16 +856,18 @@ impl<'p> Seq<'p, char> for String {
     }
 }
 
-impl<'p> Seq<'p, char> for &'p str {
-    type Item<'a>
+impl<'src, 'a> Seq<'src, char> for &'a str
+where
+    'a: 'src,
+{
+    type Item<'x>
         = char
     where
-        Self: 'a;
-
-    type Iter<'a>
-        = core::str::Chars<'a>
+        Self: 'x;
+    type Iter<'x>
+        = core::str::Chars<'x>
     where
-        Self: 'a;
+        Self: 'x;
 
     #[inline(always)]
     fn seq_iter(&self) -> Self::Iter<'_> {
@@ -878,9 +880,9 @@ impl<'p> Seq<'p, char> for &'p str {
     }
 
     #[inline]
-    fn to_maybe_ref<'b>(item: Self::Item<'b>) -> MaybeRef<'p, char>
+    fn to_maybe_ref<'r>(item: Self::Item<'r>) -> MaybeRef<'src, char>
     where
-        'p: 'b,
+        'src: 'r,
     {
         MaybeRef::Val(item)
     }
@@ -976,7 +978,7 @@ impl<'p, T> OrderedSeq<'p, T> for RangeFrom<T> where Self: Seq<'p, T> {}
 
 impl OrderedSeq<'_, char> for str {}
 impl OrderedSeq<'_, char> for String {}
-impl<'p> OrderedSeq<'p, char> for &'p str {}
+impl<'src, 'p> OrderedSeq<'p, char> for &'src str where 'src: 'p {}
 impl<'p> OrderedSeq<'p, &'p Grapheme> for &'p str {}
 impl<'p> OrderedSeq<'p, &'p Grapheme> for &'p Graphemes {}
 

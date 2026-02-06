@@ -394,6 +394,7 @@ pub trait BorrowInput: Input {
     ) -> Option<&'src Self::Token>;
 }
 
+
 impl InputFor<'_, char> for &'_ str {
     type Cursor = usize;
 
@@ -473,8 +474,8 @@ impl StrInput for &str {
         slice.to_string()
     }
 }
-impl<'src> SliceInputFor<'src> for &str {
-    type Slice = Ref<'src, str>;
+impl<'src> SliceInputFor<'src> for &'_ str {
+    type Slice = &'src str;
 }
 
 impl SliceInput for &str {
