@@ -1,4 +1,4 @@
-use crate::input::{CacheOf, CursorOf, InputFor, MaybeTokenOf};
+use crate::input::{CacheOf, CursorOf, HandleOf, InputFor, MaybeTokenOf};
 
 use super::*;
 
@@ -71,7 +71,9 @@ impl<'src, I: Iterator> InputFor<'src, I::Item> for Stream<I> {
 
     type Cursor = usize;
 
-    type Cache = &'src mut Self;
+    type Cache = Self;
+    
+    type Handle = Self;
 }
 
 impl<I: Iterator> Input for Stream<I>
@@ -82,8 +84,8 @@ where
 
     type Token = I::Item;
     #[inline(always)]
-    fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
-        (0, self)
+    fn begin<'src>(me: CacheOf<'src,Self>) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+        (0, me)
     }
 
     #[inline]
@@ -148,15 +150,15 @@ where
 /// This input type supports rewinding by [`Clone`]-ing the iterator. It is recommended that your iterator is very
 /// cheap to clone. If this is not the case, consider using [`Stream`] instead, which caches generated tokens
 /// internally.
-pub struct IterInput<'src,I, S, T> {
+pub struct IterInput<I, S, T> {
     iter: I,
-    eoi: &'src S,
+    eoi: S,
     _t: EmptyPhantom<T>,
 }
 
-impl<'src,I, S, T> IterInput<'src,I, S, T> {
+impl<'src,I, S, T> IterInput<I, S, T> {
     /// Create a new [`IterInput`] with the given iterator, and end of input span.
-    pub fn new(iter: I, eoi: &'src S) -> Self {
+    pub fn new(iter: I, eoi: S) -> Self {
         Self {
             iter,
             eoi,
@@ -165,7 +167,7 @@ impl<'src,I, S, T> IterInput<'src,I, S, T> {
     }
 }
 
-impl<'src, I, S: Span, T> InputFor<'src, T> for IterInput<'_,I, S, T>
+impl<'src, I, S: Span, T> InputFor<'src, T> for IterInput<I, S, T>
 where
     I: Iterator<Item = (T, S)> + Clone,
 {
@@ -173,10 +175,12 @@ where
 
     type MaybeToken = T;
 
-    type Cache = &'src S; // eoi
+    type Cache = S; //eoi
+    
+    type Handle = Self; 
 }
 
-impl<I, T, S> Input for IterInput<'_,I, S, T>
+impl<I, T, S> Input for IterInput<I, S, T>
 where
     S: Span,
     I: Iterator<Item = (T, S)> + Clone,
@@ -185,8 +189,8 @@ where
 
     type Token = T;
     #[inline]
-    fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
-        ((self.iter.clone(), 0, None), self.eoi)
+    fn begin<'src>(me: HandleOf<'src,Self>) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+        ((me.iter.clone(), 0, None), me.eoi)
     }
 
     #[inline]
@@ -227,7 +231,7 @@ where
 //     }
 // }
 
-impl<I, T, S> ValueInput for IterInput<'_,I, S, T>
+impl<I, T, S> ValueInput for IterInput<I, S, T>
 where
     I: Iterator<Item = (T, S)> + Clone,
     S: Span,

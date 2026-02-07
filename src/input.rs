@@ -64,10 +64,13 @@ pub trait InputFor<'src, T, ImplicitBounds: Sealed = Bounds<&'src Self>> {
     /// out of memory. If your input type falls into a similar category, `()` can be used. However, some inputs -
     /// like [`Stream`] - need to do extra bookkeeping to support backtracking, and a cache facilitates this behaviour.
     type Cache;
+
+    type Handle;
 }
 
 pub type CacheOf<'src, I> = <I as InputFor<'src, <I as Input>::Token>>::Cache;
 pub type CursorOf<'src, I> = <I as InputFor<'src, <I as Input>::Token>>::Cursor;
+pub type HandleOf<'src, I> = <I as InputFor<'src, <I as Input>::Token>>::Handle;
 pub type MaybeTokenOf<'src, I> = <I as InputFor<'src, <I as Input>::Token>>::MaybeToken;
 
 /// A trait for types that represents a stream of input tokens. Unlike [`Iterator`], this type
@@ -102,7 +105,7 @@ pub trait Input: for<'src> InputFor<'src, Self::Token> {
     /// type (see [`Input::MaybeToken`]).
     type Token;
     /// Create an initial cursor and cache at the start of the input.
-    fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>);
+    fn begin<'src>(me: HandleOf<'src, Self>) -> (CursorOf<'src, Self>, CacheOf<'src, Self>);
 
     /// Return the 'location' associated with the given cursor.
     ///
@@ -182,13 +185,11 @@ pub trait Input: for<'src> InputFor<'src, Self::Token> {
     ///
     /// Returns spans containing your provided context as the Span::Context
     fn with_context<'src, S: Span>(
-        &'src mut self,
+        me: HandleOf<'src, Self>,
         context: S::Context,
-    ) -> WithContext<'src, S, Self>
-
-    {
+    ) -> WithContext<'src, S, Self> {
         WithContext {
-            input: self,
+            input: me,
             context,
             phantom: EmptyPhantom::new(),
         }
@@ -285,13 +286,16 @@ pub trait Input: for<'src> InputFor<'src, Self::Token> {
     ///
     /// This is useful if you wish to include extra context that applies to all spans emitted during a parse, such as
     /// an identifier that corresponds to the file the spans originated from.
-    fn map_span<'src, S: Span, F>(&'src mut self, map_fn: F) -> MappedSpan<'src, S, Self, F>
+    fn map_span<'src, S: Span, F>(
+        me: HandleOf<'src, Self>,
+        map_fn: F,
+    ) -> MappedSpan<'src, S, Self, F>
     where
         Self: Input + Sized,
         F: SpanMapper<'src, Self::Span, S>,
     {
         MappedSpan {
-            input: self,
+            input: me,
             map_fn,
             phantom: PhantomData,
         }
@@ -402,6 +406,8 @@ impl<'src> InputFor<'src, char> for str {
     type MaybeToken = char;
 
     type Cache = &'src Self;
+
+    type Handle = &'src Self;
 }
 
 impl Input for str {
@@ -409,8 +415,8 @@ impl Input for str {
 
     type Token = char;
     #[inline]
-    fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
-        (0, self)
+    fn begin<'src>(me: HandleOf<'src, Self>) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+        (0, me)
     }
 
     #[inline]
@@ -445,6 +451,21 @@ impl Input for str {
         range: Range<&CursorOf<'src, Self>>,
     ) -> Self::Span {
         (*range.start..*range.end).into()
+    }
+}
+
+pub trait WithContextExt<'src> {
+    type Input: Input + ?Sized;
+
+    fn with_context<S: Span>(self, ctx: S::Context) -> WithContext<'src, S, Self::Input>;
+}
+
+impl<'src> WithContextExt<'src> for &'src str {
+    type Input = str;
+
+    #[inline]
+    fn with_context<S: Span>(self, ctx: S::Context) -> WithContext<'src, S, str> {
+        <str as Input>::with_context::<S>(self, ctx)
     }
 }
 
@@ -508,6 +529,8 @@ impl<'src, T> InputFor<'src, T> for [T] {
     type MaybeToken = Ref<'src, T>;
 
     type Cache = &'src Self;
+
+    type Handle = &'src Self;
 }
 
 impl<T> Input for [T] {
@@ -515,8 +538,8 @@ impl<T> Input for [T] {
 
     type Token = T;
     #[inline]
-    fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
-        (0, self)
+    fn begin<'src>(me: HandleOf<'src, Self>) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+        (0, me)
     }
 
     #[inline]
@@ -631,6 +654,8 @@ impl<'src, T, const N: usize> InputFor<'src, T> for [T; N] {
     type MaybeToken = Ref<'src, T>;
 
     type Cache = &'src Self;
+
+    type Handle = &'src Self;
 }
 
 impl<T, const N: usize> Input for [T; N] {
@@ -638,8 +663,8 @@ impl<T, const N: usize> Input for [T; N] {
 
     type Token = T;
     #[inline]
-    fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
-        (0, self)
+    fn begin<'src>(me: HandleOf<'src, Self>) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+        (0, me)
     }
 
     #[inline]
@@ -1000,8 +1025,8 @@ where
 
 /// An input wrapper that maps the span type of your input
 /// into your custom span [`Input::map_span`].
-pub struct MappedSpan<'src, S: Span, I: ?Sized, F> {
-    input: &'src mut I,
+pub struct MappedSpan<'src, S: Span, I: ?Sized + Input, F> {
+    input: HandleOf<'src, I>,
     map_fn: F,
     phantom: PhantomData<S>,
 }
@@ -1016,7 +1041,9 @@ where
 
     type Cursor = CursorOf<'src, I>;
 
-    type Cache = (CacheOf<'src, I>, &'src F);
+    type Cache = (CacheOf<'src, I>, F);
+
+    type Handle = MappedSpan<'src, S, I, F>;
 }
 
 impl<S, I: Input + ?Sized, F> Input for MappedSpan<'_, S, I, F>
@@ -1030,9 +1057,9 @@ where
 
     type Token = I::Token;
     #[inline(always)]
-    fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
-        let (cursor, cache) = self.input.begin();
-        (cursor, (cache, &self.map_fn))
+    fn begin<'src>(me: HandleOf<'src, Self>) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+        let (cursor, cache) = <I as Input>::begin::<'src>(me.input);
+        (cursor, (cache, me.map_fn))
     }
 
     #[inline]
@@ -1177,8 +1204,8 @@ where
 
 /// An input wrapper that returns a custom span, with the user-defined context
 /// contained in the Span::Context. See [`Input::with_context`].
-pub struct WithContext<'src, S: Span, I: ?Sized> {
-    input: &'src mut I,
+pub struct WithContext<'src, S: Span, I: ?Sized + Input> {
+    input: HandleOf<'src, I>,
     context: S::Context,
     #[allow(dead_code)]
     phantom: EmptyPhantom<S>,
@@ -1193,7 +1220,9 @@ where
 
     type MaybeToken = MaybeTokenOf<'src, I>;
 
-    type Cache = (CacheOf<'src, I>, &'src mut S::Context);
+    type Cache = (CacheOf<'src, I>, S::Context);
+
+    type Handle = WithContext<'src, S, I>;
 }
 
 impl<S, I> Input for WithContext<'_, S, I>
@@ -1208,9 +1237,9 @@ where
     type Token = I::Token;
 
     #[inline(always)]
-    fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
-        let (cursor, cache) = self.input.begin();
-        (cursor, (cache, &mut self.context))
+    fn begin<'src>(me: HandleOf<'src, Self>) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+        let (cursor, cache) = <I as Input>::begin::<'src>(me.input);
+        (cursor, (cache, me.context))
     }
 
     #[inline]
@@ -1336,7 +1365,7 @@ where
     }
 }
 
-impl<S: Span, I> Sealed for WithContext<'_, S, I> {}
+impl<S: Span, I: Input> Sealed for WithContext<'_, S, I> {}
 
 impl<S, I> StrInput for WithContext<'_, S, I>
 where
@@ -1378,7 +1407,9 @@ impl<'src, R: Read + Seek> InputFor<'src, u8> for IoInput<R> {
 
     type MaybeToken = u8;
 
-    type Cache = &'src mut Self;
+    type Cache = Self;
+
+    type Handle = Self;
 }
 
 #[cfg(feature = "std")]
@@ -1386,8 +1417,8 @@ impl<R: Read + Seek> Input for IoInput<R> {
     type Span = SimpleSpan;
 
     type Token = u8;
-    fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
-        (0, self)
+    fn begin<'src>(me: HandleOf<'src, Self>) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+        (0, me)
     }
 
     #[inline(always)]
@@ -1564,12 +1595,12 @@ where
     I::Token: IntoMaybe<'src, I::Token>,
 {
     #[cfg_attr(not(test), allow(dead_code))]
-    pub(crate) fn new(input: &'src mut I) -> InputOwn<'src, 's, I, E>
+    pub(crate) fn new(input: HandleOf<'src, I>) -> InputOwn<'src, 's, I, E>
     where
         E::State: Default,
         CtxOf<'src, I, E>: Default,
     {
-        let (start, cache) = input.begin();
+        let (start, cache) = <I as Input>::begin::<'src>(input);
         InputOwn {
             start,
             cache,
@@ -1581,11 +1612,14 @@ where
         }
     }
 
-    pub(crate) fn new_state(input: &'src mut I, state: &'s mut E::State) -> InputOwn<'src, 's, I, E>
+    pub(crate) fn new_state(
+        input: HandleOf<'src, I>,
+        state: &'s mut E::State,
+    ) -> InputOwn<'src, 's, I, E>
     where
         CtxOf<'src, I, E>: Default,
     {
-        let (start, cache) = input.begin();
+        let (start, cache) = <I as Input>::begin::<'src>(input);
         InputOwn {
             start,
             cache,

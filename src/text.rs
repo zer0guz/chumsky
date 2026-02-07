@@ -590,7 +590,7 @@ pub use unicode::*;
 
 /// Parsers and utilities for working with unicode inputs.
 pub mod unicode {
-    use crate::input::{CacheOf, CursorOf, InputFor, MaybeTokenOf};
+    use crate::input::{CacheOf, CursorOf, HandleOf, InputFor, MaybeTokenOf};
 
     use super::*;
 
@@ -862,6 +862,8 @@ pub mod unicode {
         type MaybeToken = &'a Grapheme;
 
         type Cache = Self;
+        
+        type Handle = Self;
     }
 
     impl<'a> Input for &'a Graphemes {
@@ -869,8 +871,8 @@ pub mod unicode {
 
         type Token = &'a Grapheme;
         #[inline]
-        fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
-            (0, self)
+        fn begin<'src>(me: HandleOf<'src,Self>) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+            (0, me)
         }
 
         #[inline]

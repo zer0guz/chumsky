@@ -121,6 +121,8 @@ pub mod prelude {
     pub use crate::{select, select_ref};
 }
 
+#[cfg(feature = "unstable")]
+use crate::input::HandleOf;
 use crate::{
     extra::{CtxOf, ErrOfEx},
     hkt::{Hkt, Id, Lt, MapFn, MapWithFn, Mapper, ResultOut},
@@ -411,7 +413,7 @@ pub trait Parser<I: Input + ?Sized, O: Hkt, E: ParserExtra<I> = extra::Default> 
     ///
     /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
     /// [`&[T]`], a [`&str`], [`Stream`], or anything implementing [`Input`] to it.
-    fn parse<'src>(&self, input: &'src mut I) -> ParseResult<O::Of<'src>, ErrOfEx<'src, I, E>>
+    fn parse<'src>(&self, input: HandleOf<'src, I>) -> ParseResult<O::Of<'src>, ErrOfEx<'src, I, E>>
     where
         E::State: Default,
         CtxOf<'src, I, E>: Default,
@@ -422,7 +424,7 @@ pub trait Parser<I: Input + ?Sized, O: Hkt, E: ParserExtra<I> = extra::Default> 
     /// TODO
     fn parse_strict<'src>(
         &self,
-        input: &'src mut I,
+        input: HandleOf<'src, I>,
     ) -> ParseResult<O::Of<'src>, ErrOfEx<'src, I, E>>
     where
         I: Input + 'src,
@@ -443,7 +445,7 @@ pub trait Parser<I: Input + ?Sized, O: Hkt, E: ParserExtra<I> = extra::Default> 
     /// [`&[T]`], a [`&str`], [`Stream`], or anything implementing [`Input`] to it.
     fn parse_with_state<'src>(
         &self,
-        input: &'src mut I,
+        input: HandleOf<'src, I>,
         state: &mut E::State,
     ) -> ParseResult<O::Of<'src>, ErrOfEx<'src, I, E>>
     where
@@ -475,7 +477,7 @@ pub trait Parser<I: Input + ?Sized, O: Hkt, E: ParserExtra<I> = extra::Default> 
     /// TODO Docs
     fn parse_with_state_strict<'src>(
         &self,
-        input: &'src mut I,
+        input: HandleOf<'src, I>,
         state: &mut E::State,
     ) -> ParseResult<O::Of<'src>, ErrOfEx<'src, I, E>>
     where
@@ -510,7 +512,7 @@ pub trait Parser<I: Input + ?Sized, O: Hkt, E: ParserExtra<I> = extra::Default> 
     ///
     /// Although the signature of this function looks complicated, it's simpler than you think! You can pass a
     /// [`&[T]`], a [`&str`], [`Stream`], or anything implementing [`Input`] to it.
-    fn check<'src>(&self, input: &'src mut I) -> ParseResult<(), ErrOfEx<'src, I, E>>
+    fn check<'src>(&self, input: HandleOf<'src, I>) -> ParseResult<(), ErrOfEx<'src, I, E>>
     where
         Self: Sized,
         I: Input + 'src,
@@ -529,7 +531,7 @@ pub trait Parser<I: Input + ?Sized, O: Hkt, E: ParserExtra<I> = extra::Default> 
     /// [`&[T]`], a [`&str`], [`Stream`], or anything implementing [`Input`] to it.
     fn check_with_state<'src>(
         &self,
-        input: &'src mut I,
+        input: HandleOf<'src, I>,
         state: &mut E::State,
     ) -> ParseResult<(), ErrOfEx<'src, I, E>>
     where
@@ -692,7 +694,7 @@ pub trait Parser<I: Input + ?Sized, O: Hkt, E: ParserExtra<I> = extra::Default> 
     /// assert_eq!(token.parse("test").into_result(), Ok(Token::Word("test".to_string())));
     /// assert_eq!(token.parse("42").into_result(), Ok(Token::Num(42)));
     /// ```
-    fn map<U>(self, f: MyFn<O, U>) -> Map<Self, O, U, Mapper<MyFn<O, U>, U>>
+    fn map<U>(self, f: MapperFn<O, U>) -> Map<Self, O, U, Mapper<MapperFn<O, U>, U>>
     where
         Self: Sized,
         U: Hkt,
@@ -790,11 +792,13 @@ pub trait Parser<I: Input + ?Sized, O: Hkt, E: ParserExtra<I> = extra::Default> 
     /// assert_eq!(palindrome_parser().parse("hello  olleh").into_result().as_deref(), Ok(" olleh"));
     /// assert!(palindrome_parser().parse("abccb").into_result().is_err());
     /// ```
-    fn map_with<U, F>(self, f: F) -> MapWith<Self, O, Mapper<F, U>>
+    fn map_with<U>(
+        self,
+        f: MapperWithFn<O, U, I, E>,
+    ) -> MapWith<Self, O, U, Mapper<MapperWithFn<O, U, I, E>, U>>
     where
         Self: Sized,
         U: Hkt,
-        F: for<'src> Fn(O::Of<'src>, &mut MapExtra<'src, '_, I, E>) -> U::Of<'src>,
     {
         MapWith {
             parser: self,
@@ -3020,7 +3024,7 @@ where
     #[cfg(feature = "unstable")]
     fn parse_iter<'src, F, R>(
         &mut self,
-        input: &'src mut I,
+        input: HandleOf<'src, I>,
         f: F,
     ) -> ParseResult<R, ErrOfEx<'src, I, E>>
     where
@@ -3038,7 +3042,7 @@ where
     #[cfg(feature = "unstable")]
     fn parse_iter_with_state<'src, F, R>(
         &mut self,
-        input: &'src mut I,
+        input: HandleOf<'src, I>,
         state: &mut E::State,
         f: F,
     ) -> ParseResult<R, ErrOfEx<'src, I, E>>
@@ -3377,13 +3381,17 @@ macro_rules! select_ref {
 }
 
 #[allow(type_alias_bounds)]
-type MyFn<I: Hkt, O: Hkt> = for<'a> fn(I::Of<'a>, Lt<'a>) -> O::Of<'a>;
+type MapperFn<I: Hkt, O: Hkt> = for<'a> fn(I::Of<'a>, Lt<'a>) -> O::Of<'a>;
+#[allow(type_alias_bounds)]
+type MapperWithFn<O: Hkt, U: Hkt, I, E> =
+    for<'a> fn(O::Of<'a>, &mut MapExtra<'a, '_, I, E>) -> U::Of<'a>;
 
 #[cfg(test)]
 mod tests {
+
     use crate::{
-        hkt::{CollectExactlyOut, Hkt, Id, Lt, SliceOut},
-        prelude::*,
+        hkt::{CollectExactlyOut, Hkt, Id, SliceOut},
+        input::WithContextExt,
     };
 
     #[test]
@@ -3396,69 +3404,77 @@ mod tests {
             Ident(&'src str),
             String(&'src str),
         }
-
-        struct TokenHkt;
-        struct Str;
-        impl Hkt for Str {
-            type Of<'src> = &'src str;
-        }
         impl Hkt for Token<'_> {
-            type Of<'src> = Token<'src>;
-        }
-        impl Hkt for TokenHkt {
             type Of<'src> = Token<'src>;
         }
 
         type FileId = u32;
         type Span = SimpleSpan<usize, FileId>;
+        type In<'src> = WithContext<'src, Span, str>;
+        type Out<'src> = CollectExactlyOut<[(); 6], (Id<Span>, Token<'src>)>;
 
-        type Out = CollectExactlyOut<[(); 6], (Id<Span>, TokenHkt)>;
-
-        fn parsertest() -> impl Parser<str, Id<char>> {
-            any().map(|a, _| 'b')
+        fn parsertest1<'src>() -> impl Parser<str, SliceOut<str>> {
+            let ident = any().to_slice();
+            let string = any().to_slice();
+            ident.or(string)
         }
 
-        fn parsertest2() -> impl Parser<str, SliceOut<str>> {
-            just("abc").to_slice()
+        fn parsertest2<'src>() -> impl Parser<str, Token<'src>> {
+            let ident = any::<str, _>()
+                .to_slice()
+                .map::<Token<'_>>(|slice, _| Token::Ident(slice));
+            let string = any::<str, _>()
+                .to_slice()
+                .map::<Token<'_>>(|slice, _| Token::Ident(slice));
+
+            ident.or(string)
         }
         fn parsertest3<'src>() -> impl Parser<str, Token<'src>> {
-            any().to_slice().map(|slice, _| Token::Ident(slice))
-        }
-
-        fn parsertest4<'src>() -> impl Parser<str, Token<'src>> {
-            any()
+            let ident = any()
                 .to_slice()
-                .map(|slice, _| Token::Ident(slice))
-                .then_ignore(any())
-        }
-
-        fn parsertest5<'src>() -> impl Parser<WithContext<'src, Span, str>, TokenHkt> {
-            any()
+                .map::<Token<'_>>(|slice, _| Token::Ident(slice));
+            let string = any()
                 .to_slice()
-                .map(|slice, _| Token::Ident(slice))
-                .or(any().to_slice().map(|slice, _| Token::String(slice)))
-        }
-
-        fn parser<'src>() -> impl Parser<WithContext<'src, Span, str>, TokenHkt> {
-            let ident = any().to_slice().map(|s, _| Token::Ident(s));
-
-            let string = any().to_slice().map(|s, _| Token::String(s));
+                .map::<Token<'_>>(|slice, _| Token::Ident(slice));
 
             ident.or(string)
         }
 
-        // let input: &str = r#"hello "world" these are "test" tokens"#;
-        // assert_eq!(
-        //     parser().parse(&mut input.with_context(42)).into_result(),
-        //     Ok([
-        //         (Span::new(42, 0..5), Token::Ident("hello")),
-        //         (Span::new(42, 6..13), Token::String("\"world\"")),
-        //         (Span::new(42, 14..19), Token::Ident("these")),
-        //         (Span::new(42, 20..23), Token::Ident("are")),
-        //         (Span::new(42, 24..30), Token::String("\"test\"")),
-        //         (Span::new(42, 31..37), Token::Ident("tokens")),
-        //     ]),
-        // );
+        fn parser<'src>() -> impl Parser<In<'src>, Out<'src>> {
+            let ident = any::<In<'src>, _>()
+                .filter(|c| c.is_alphanumeric())
+                .repeated()
+                .at_least(1)
+                .to_slice()
+                .map::<Token<'_>>(|slice, _| Token::Ident(slice));
+
+            let string = just::<_, In<'src>, _>('"')
+                .then(any().filter(|c| *c != '"').repeated())
+                .then(just('"'))
+                .to_slice()
+                .map(|slice, _| Token::String(slice));
+
+            ident
+                .or(string)
+                .map_with(|token, e| (e.span(), token))
+                .padded()
+                .repeated()
+                .collect_exactly()
+        }
+
+        assert_eq!(
+            parser()
+                .parse(r#"hello "world" these are "test" tokens"#.with_context(42))
+                .into_result(),
+            Ok([
+                (Span::new(42, 0..5), Token::Ident("hello")),
+                (Span::new(42, 6..13), Token::String("\"world\"")),
+                (Span::new(42, 14..19), Token::Ident("these")),
+                (Span::new(42, 20..23), Token::Ident("are")),
+                (Span::new(42, 24..30), Token::String("\"test\"")),
+                (Span::new(42, 31..37), Token::Ident("tokens")),
+            ]),
+        );
     }
 
     //     #[test]

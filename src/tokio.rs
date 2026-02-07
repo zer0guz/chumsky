@@ -1,4 +1,4 @@
-use crate::input::{CacheOf, CursorOf, InputFor, MaybeTokenOf, SliceInputFor, SliceOf};
+use crate::input::{CacheOf, CursorOf, HandleOf, InputFor, MaybeTokenOf, SliceInputFor, SliceOf};
 
 use super::*;
 
@@ -9,7 +9,9 @@ impl<'src> InputFor<'src, u8> for Bytes {
 
     type MaybeToken = u8;
 
-    type Cache = &'src Self;
+    type Cache = Self;
+    
+    type Handle = Self;
 }
 
 impl Input for Bytes {
@@ -18,8 +20,8 @@ impl Input for Bytes {
     type Token = u8;
 
     #[inline]
-    fn begin<'src>(&'src mut self) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
-        (0, self)
+    fn begin<'src>(me: HandleOf<'src,Self>) -> (CursorOf<'src, Self>, CacheOf<'src, Self>) {
+        (0, me)
     }
 
     #[inline]

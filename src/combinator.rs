@@ -482,15 +482,15 @@ where
 }
 
 /// See [`Parser::map_with`].
-pub struct MapWith<A, OA, F> {
+pub struct MapWith<A, OA,U, F> {
     pub(crate) parser: A,
     pub(crate) mapper: F,
     #[allow(dead_code)]
-    pub(crate) phantom: EmptyPhantom<OA>,
+    pub(crate) phantom: EmptyPhantom<(OA,U)>,
 }
 
-impl<A: Copy, OA, F: Copy> Copy for MapWith<A, OA, F> {}
-impl<A: Clone, OA, F: Clone> Clone for MapWith<A, OA, F> {
+impl<A: Copy, OA,U, F: Copy> Copy for MapWith<A, OA,U, F> {}
+impl<A: Clone, OA,U, F: Clone> Clone for MapWith<A, OA,U, F> {
     fn clone(&self) -> Self {
         Self {
             parser: self.parser.clone(),
@@ -499,7 +499,7 @@ impl<A: Clone, OA, F: Clone> Clone for MapWith<A, OA, F> {
         }
     }
 }
-impl<I, E, A, OA, F> Parser<I, <F as MapWithFn<OA, I, E>>::Out, E> for MapWith<A, OA, F>
+impl<I, E, A,O, OA, F> Parser<I, <F as MapWithFn<OA, I, E>>::Out, E> for MapWith<A, OA,O, F>
 where
     I: Input + ?Sized,
     E: ParserExtra<I>,
@@ -528,7 +528,7 @@ where
     go_extra!(<F as MapWithFn<OA, I, E>>::Out);
 }
 
-impl<I, O: Hkt, E, A, OA, F> IterParser<I, O, E> for MapWith<A, OA, F>
+impl<I, O: Hkt, E, A, OA, F> IterParser<I, O, E> for MapWith<A, OA,O, F>
 where
     I: Input + ?Sized,
     E: ParserExtra<I>,
